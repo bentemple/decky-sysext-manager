@@ -136,9 +136,10 @@ function update_grub_resume {
 	# Remove existing resume parameters if present
 	sed -i -E 's/ resume=[^ ]*//g' "$cfg"
 	sed -i -E 's/ resume_offset=[0-9]*//g' "$cfg"
+	sed -i -E 's/ rtc_cmos.use_acpi_alarm=1//g' "$cfg"
 
 	# Add new resume parameters
-	sed -i -E 's@^(\s*)'$starter'(.*)$@\1'$starter'\2 resume=/dev/disk/by-uuid/'$uuid' resume_offset='$offset'@g' "$cfg"
+	sed -i -E 's@^(\s*)'$starter'(.*)$@\1'$starter'\2 resume=/dev/disk/by-uuid/'$uuid' resume_offset='$offset' rtc_cmos.use_acpi_alarm=1@g' "$cfg"
 	touch /tmp/.hibernate-after-sleep-modified
 }
 

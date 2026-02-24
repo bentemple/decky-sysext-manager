@@ -110,6 +110,7 @@ elif grep -q "resume=/dev/disk/by-uuid" "$cfg"; then
 
 	sed -i -E 's/ resume=[^ ]*//g' "$cfg"
 	sed -i -E 's/ resume_offset=[0-9]*//g' "$cfg"
+	sed -i -E 's/ rtc_cmos.use_acpi_alarm=1//g' "$cfg"
 
 	if $remount; then
 		steamos-readonly enable
