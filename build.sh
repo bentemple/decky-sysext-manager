@@ -36,7 +36,7 @@ if [[ ! -d $build_dir ]]; then
     mkdir -p $build_dir
 fi
 local temp=$(mktemp -d)
-for dir in $(ls | grep -v build | grep -v README.md); do
+for dir in steamos-extension-*(/N); do
 	rsync $dir/ -rav --delete --delete-before $temp
 	mkdir -p $temp/usr/lib/extension-release.d
 	echo 'ID=_any' > $temp/usr/lib/extension-release.d/extension-release.$dir
