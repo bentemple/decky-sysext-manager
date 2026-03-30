@@ -1,0 +1,32 @@
+name: Validate Raw Files
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'steamos-extension-*/**'
+      - 'assets/extensions/**'
+      - 'scripts/validate-extensions.sh'
+      - '.github/workflows/validate-raw.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'steamos-extension-*/**'
+      - 'assets/extensions/**'
+      - 'scripts/validate-extensions.sh'
+      - '.github/workflows/validate-raw.yml'
+
+jobs:
+  validate:
+    name: Validate .raw files match source
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install squashfs-tools
+        run: sudo apt-get update && sudo apt-get install -y squashfs-tools
+
+      - name: Validate .raw files match source
+        run: ./scripts/validate-extensions.sh

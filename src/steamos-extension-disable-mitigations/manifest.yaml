@@ -1,0 +1,8 @@
+name: "Disable Mitigations"
+id: "disable-mitigations"
+description: "Add mitigations=off kernel parameter for better performance (security trade-off)"
+version: "1.0.0"
+category: "performance"
+
+activation:
+  mode: reboot

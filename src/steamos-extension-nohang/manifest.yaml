@@ -1,0 +1,8 @@
+name: "Nohang"
+id: "nohang"
+description: "Minimize latency and prevent system hangs in low-memory conditions"
+version: "1.0.0"
+category: "performance"
+
+activation:
+  mode: hot-reload

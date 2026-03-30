@@ -1,0 +1,48 @@
+name: "Hibernate After Sleep"
+id: "hibernate-after-sleep"
+description: "Auto-hibernate after configurable suspend time to save battery"
+version: "1.0.0"
+category: "power"
+
+# Activation behavior
+activation:
+  mode: reboot  # Requires reboot due to GRUB and swap changes
+
+# Configuration parameters
+config:
+  path: "/home/deck/.config/hibernate-after-sleep"
+  parameters:
+    - id: HibernateDelaySec
+      label: "Hibernate Delay"
+      description: "Time to wait before hibernating after suspend"
+      type: duration
+      default: 60
+      unit: "min"
+      min: 5
+      max: 480
+      step: 5
+
+    - id: TargetSwapFileSizeInGbs
+      label: "Swap File Size"
+      description: "Size of swap file for hibernation (must fit RAM contents)"
+      type: integer
+      default: 20
+      unit: "GB"
+      min: 8
+      max: 64
+      step: 1
+
+# Configure script - applies config changes
+configure:
+  script: "./configure"
+
+# Uninstall handling
+uninstall:
+  script: "./uninstall"
+  prompts:
+    - id: resize_swapfile
+      message: "Resize swapfile back to 1GB?"
+      default: false
+    - id: remove_uninstaller
+      message: "Remove uninstall script from ~/.bin?"
+      default: false

@@ -1,0 +1,8 @@
+name: "Prelockd"
+id: "prelockd"
+description: "Prevent executable pages from being swapped out for consistent performance"
+version: "1.0.0"
+category: "performance"
+
+activation:
+  mode: hot-reload

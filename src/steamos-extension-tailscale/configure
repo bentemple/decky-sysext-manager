@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Add tailscale to PATH for interactive shells
+set -eu -o pipefail
+
+SOURCE_LINE='source /etc/profile.d/tailscale.sh'
+
+add_to_file() {
+    local file="$1"
+    if [[ -f "$file" ]] && ! grep -qF "$SOURCE_LINE" "$file"; then
+        echo "" >> "$file"
+        echo "# Tailscale PATH" >> "$file"
+        echo "$SOURCE_LINE" >> "$file"
+        echo "Added to $file"
+    fi
+}
+
+# Add to bash and zsh configs if they exist
+add_to_file "$HOME/.bashrc"
+add_to_file "$HOME/.zshrc"
+
+echo "Tailscale configured. Restart your shell or run: $SOURCE_LINE"

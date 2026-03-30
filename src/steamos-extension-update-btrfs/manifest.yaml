@@ -1,0 +1,8 @@
+name: "Update BTRFS"
+id: "update-btrfs"
+description: "Auto-update steamos-btrfs for better filesystem performance"
+version: "1.0.0"
+category: "utilities"
+
+activation:
+  mode: auto

@@ -1,0 +1,8 @@
+name: "IRQ Balance"
+id: "irqbalance"
+description: "Balance hardware interrupts across CPU cores for better performance"
+version: "1.0.0"
+category: "performance"
+
+activation:
+  mode: hot-reload

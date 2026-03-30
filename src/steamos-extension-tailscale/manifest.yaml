@@ -1,0 +1,8 @@
+name: "Tailscale VPN"
+id: "tailscale"
+description: "Persist Tailscale VPN across SteamOS updates"
+version: "1.0.0"
+category: "network"
+
+activation:
+  mode: auto

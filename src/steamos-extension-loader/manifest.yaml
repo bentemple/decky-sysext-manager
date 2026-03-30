@@ -1,0 +1,9 @@
+name: "Extension Loader"
+id: "loader"
+description: "Core extension that persists other extensions between SteamOS updates (required)"
+version: "1.0.0"
+category: "system"
+required: true
+
+activation:
+  mode: reboot

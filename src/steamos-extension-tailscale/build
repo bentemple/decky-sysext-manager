@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Syncs files from deck-tailscale submodule into overlayfs
+# Run this script after updating the submodule to refresh the extension files
+set -eu -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUBMODULE_DIR="$SCRIPT_DIR/deck-tailscale"
+OVERLAYFS_DIR="$SCRIPT_DIR/overlayfs"
+
+if [[ ! -d "$SUBMODULE_DIR" ]]; then
+    echo "Error: deck-tailscale submodule not found at $SUBMODULE_DIR"
+    echo "Run: git submodule update --init"
+    exit 1
+fi
+
+echo "Syncing from deck-tailscale submodule..."
+
+# Ensure directories exist
+mkdir -p "$OVERLAYFS_DIR/usr/sbin"
+mkdir -p "$OVERLAYFS_DIR/usr/lib/systemd/system"
+mkdir -p "$OVERLAYFS_DIR/usr/lib/systemd/system/tailscaled.service.d"
+mkdir -p "$OVERLAYFS_DIR/usr/lib/systemd/system-preset"
+mkdir -p "$OVERLAYFS_DIR/usr/share"
+
+# Copy install script unchanged
+cp "$SUBMODULE_DIR/tailscale.sh" "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale"
+chmod 755 "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale"
+
+# Copy override.conf to where the script expects it (WorkingDirectory in service points here)
+mkdir -p "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale"
+cp "$SUBMODULE_DIR/override.conf" "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale/override.conf"
+
+# Copy uninstall script
+cp "$SUBMODULE_DIR/uninstall.sh" "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale-uninstall"
+chmod 755 "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale-uninstall"
+
+echo "Done. Files synced to overlayfs/"
+echo "Remember to commit the updated files."

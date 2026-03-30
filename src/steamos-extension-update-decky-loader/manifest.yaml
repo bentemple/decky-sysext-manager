@@ -1,0 +1,8 @@
+name: "Update Decky Loader"
+id: "update-decky-loader"
+description: "Auto-update Decky Loader to the latest version"
+version: "1.0.0"
+category: "utilities"
+
+activation:
+  mode: auto

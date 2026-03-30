@@ -1,19 +1,41 @@
 #!/usr/bin/env zsh
 set -ex
 
-find --iname '*.preset' | xargs -rI{} sort -o {} {}
+# Sort all preset files (check both old and new structure)
+find . -path '*/usr/*' -iname '*.preset' | xargs -rI{} sort -o {} {}
 
-curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/LICENSE' > steamos-extension-nohang/usr/share/steamos-extension-nohang-LICENSE
-curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/src/nohang' > steamos-extension-nohang/usr/sbin/steamos-extension-nohang
-chmod 644 steamos-extension-nohang/usr/share/steamos-extension-nohang-LICENSE
-chmod 755 steamos-extension-nohang/usr/sbin/steamos-extension-nohang
+# Download external dependencies
+# Note: paths updated for overlayfs structure when extensions are migrated
+function download_nohang() {
+    local base_dir=$1
+    curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/LICENSE' > $base_dir/usr/share/steamos-extension-nohang-LICENSE
+    curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/src/nohang' > $base_dir/usr/sbin/steamos-extension-nohang
+    chmod 644 $base_dir/usr/share/steamos-extension-nohang-LICENSE
+    chmod 755 $base_dir/usr/sbin/steamos-extension-nohang
+}
 
-curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/LICENSE' > steamos-extension-prelockd/usr/share/steamos-extension-prelockd-LICENSE
-curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/prelockd' > steamos-extension-prelockd/usr/sbin/steamos-extension-prelockd
-chmod 644 steamos-extension-prelockd/usr/share/steamos-extension-prelockd-LICENSE
-chmod 755 steamos-extension-prelockd/usr/sbin/steamos-extension-prelockd
+function download_prelockd() {
+    local base_dir=$1
+    curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/LICENSE' > $base_dir/usr/share/steamos-extension-prelockd-LICENSE
+    curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/prelockd' > $base_dir/usr/sbin/steamos-extension-prelockd
+    chmod 644 $base_dir/usr/share/steamos-extension-prelockd-LICENSE
+    chmod 755 $base_dir/usr/sbin/steamos-extension-prelockd
+}
 
-function compress() { 
+# Download to correct location based on structure
+if [[ -d src/steamos-extension-nohang/overlayfs ]]; then
+    download_nohang src/steamos-extension-nohang/overlayfs
+else
+    download_nohang src/steamos-extension-nohang
+fi
+
+if [[ -d src/steamos-extension-prelockd/overlayfs ]]; then
+    download_prelockd src/steamos-extension-prelockd/overlayfs
+else
+    download_prelockd src/steamos-extension-prelockd
+fi
+
+function compress() {
 	local target=$1
 	shift
 	mksquashfs $@ $target \
@@ -31,27 +53,35 @@ function compress() {
 		-fragment-queue 2048
 }
 
-local build_dir=$(pwd)/build/
-if [[ ! -d $build_dir ]]; then
-    mkdir -p $build_dir
+local assets_dir=$(pwd)/assets/extensions/
+if [[ ! -d $assets_dir ]]; then
+    mkdir -p $assets_dir
 fi
 local temp=$(mktemp -d)
-for dir in steamos-extension-*(/N); do
-	rsync $dir/ -rav --delete --delete-before $temp
+for dir in src/steamos-extension-*(/N); do
+	# Check for new overlayfs structure, fall back to old structure
+	local source_dir=$dir
+	local ext_name=$(basename $dir)
+	if [[ -d $dir/overlayfs ]]; then
+		source_dir=$dir/overlayfs
+	fi
+
+	rsync $source_dir/ -rav --delete --delete-before $temp
 	mkdir -p $temp/usr/lib/extension-release.d
-	echo 'ID=_any' > $temp/usr/lib/extension-release.d/extension-release.$dir
-	if [[ -e $build_dir/$dir.raw ]]; then
-		rm -rf $build_dir/$dir.raw
+	echo 'ID=_any' > $temp/usr/lib/extension-release.d/extension-release.$ext_name
+	if [[ -e $assets_dir/$ext_name.raw ]]; then
+		rm -rf $assets_dir/$ext_name.raw
 	fi
 	pushd $temp
-	compress $build_dir/$dir.raw *
+	compress $assets_dir/$ext_name.raw *
 	popd
+
 done
 rm -rf $temp
 
 for extension in /var/lib/extensions/*.raw(N); do
 	local basename=$(echo $extension | rev | cut -f2- -d. | cut -f1 -d/ | rev)
-	if ! [[ -d $basename ]]; then
+	if ! [[ -d src/$basename ]]; then
 		rm -rf $extension
 	fi
 done

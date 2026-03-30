@@ -1,1 +1,33 @@
+# Build artifacts
 build/
+
+# Node.js
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+
+# Logs
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+.vscode/settings.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Decky plugin
+decky_plugin.py
+out/
+cli/
+
+# Environment
+.env

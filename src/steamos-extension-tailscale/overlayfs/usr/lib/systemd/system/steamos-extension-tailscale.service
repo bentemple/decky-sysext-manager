@@ -1,0 +1,13 @@
+[Unit]
+Description=Install/Update Tailscale VPN
+Requires=network-online.target systemd-sysext.service
+After=network-online.target systemd-sysext.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/usr/share/steamos-extension-tailscale
+ExecStart=/usr/sbin/steamos-extension-tailscale
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

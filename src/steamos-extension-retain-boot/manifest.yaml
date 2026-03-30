@@ -1,0 +1,8 @@
+name: "Retain Boot"
+id: "retain-boot"
+description: "Force SteamOS as next boot entry (helper for dual-boot setups)"
+version: "1.0.0"
+category: "boot"
+
+activation:
+  mode: reboot

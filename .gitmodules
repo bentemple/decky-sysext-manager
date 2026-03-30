@@ -1,0 +1,3 @@
+[submodule "steamos-extension-tailscale/deck-tailscale"]
+	path = steamos-extension-tailscale/deck-tailscale
+	url = https://github.com/tailscale-dev/deck-tailscale

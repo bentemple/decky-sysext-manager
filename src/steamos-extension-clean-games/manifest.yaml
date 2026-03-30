@@ -1,0 +1,8 @@
+name: "Clean Games"
+id: "clean-games"
+description: "Auto-remove untracked game directories and shader caches to free space"
+version: "1.0.0"
+category: "utilities"
+
+activation:
+  mode: auto

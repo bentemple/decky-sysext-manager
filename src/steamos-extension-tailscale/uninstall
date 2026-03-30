@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Remove tailscale PATH from shell configs
+set -eu -o pipefail
+
+remove_from_file() {
+    local file="$1"
+    if [[ -f "$file" ]] && grep -qF "source /etc/profile.d/tailscale.sh" "$file"; then
+        # Remove the source line and the comment above it
+        sed -i '/^# Tailscale PATH$/d' "$file"
+        sed -i '/source \/etc\/profile.d\/tailscale.sh/d' "$file"
+        echo "Removed from $file"
+    fi
+}
+
+remove_from_file "$HOME/.bashrc"
+remove_from_file "$HOME/.zshrc"
+
+echo "Tailscale PATH removed from shell configs."

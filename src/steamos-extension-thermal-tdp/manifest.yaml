@@ -1,0 +1,8 @@
+name: "Thermal TDP"
+id: "thermal-tdp"
+description: "Dynamic TDP management - burst to 20W, throttle to 15W based on thermals"
+version: "1.0.0"
+category: "performance"
+
+activation:
+  mode: hot-reload

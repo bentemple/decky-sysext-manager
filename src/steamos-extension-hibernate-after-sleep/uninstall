@@ -1,0 +1,158 @@
+#!/bin/bash
+# Non-interactive uninstall script for hibernate-after-sleep extension
+# Called by Decky plugin with CLI args: --resize_swapfile=true --remove_uninstaller=false
+set -e
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root"
+    exit 1
+fi
+
+# Parse CLI arguments
+RESIZE_SWAPFILE=false
+REMOVE_UNINSTALLER=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --resize_swapfile=true) RESIZE_SWAPFILE=true ;;
+        --resize_swapfile=false) RESIZE_SWAPFILE=false ;;
+        --remove_uninstaller=true) REMOVE_UNINSTALLER=true ;;
+        --remove_uninstaller=false) REMOVE_UNINSTALLER=false ;;
+    esac
+done
+
+echo "Hibernate After Sleep - Uninstalling..."
+
+echo "Step 1: Disabling services..."
+systemctl disable --now steamos-extension-hibernate-after-sleep-install.service 2>/dev/null || true
+systemctl disable --now steamos-extension-hibernate-after-sleep-fix-bluetooth.service 2>/dev/null || true
+systemctl disable --now steamos-extension-hibernate-after-sleep-mark-boot-good.service 2>/dev/null || true
+
+if [[ -L "/etc/systemd/system/systemd-suspend.service" ]]; then
+    rm -f /etc/systemd/system/systemd-suspend.service
+    echo "  Removed suspend link"
+fi
+
+echo "Step 2: Removing sleep configuration..."
+if [[ -f "/etc/systemd/sleep.conf" ]]; then
+    rm -f /etc/systemd/sleep.conf
+    echo "  Removed"
+fi
+
+echo "Step 3: Removing systemd-logind hibernation bypass..."
+override_file="/etc/systemd/system/systemd-logind.service.d/override.conf"
+if [[ -f "$override_file" ]]; then
+    if grep -q "SYSTEMD_BYPASS_HIBERNATION_MEMORY_CHECK" "$override_file"; then
+        temp_file=$(mktemp)
+        in_service_section=0
+
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^\[Service\] ]]; then
+                in_service_section=1
+                echo "$line" >> "$temp_file"
+            elif [[ "$line" =~ ^\[.*\] ]]; then
+                in_service_section=0
+                echo "$line" >> "$temp_file"
+            elif [[ $in_service_section -eq 1 ]] && [[ "$line" =~ ^Environment=SYSTEMD_BYPASS_HIBERNATION_MEMORY_CHECK ]]; then
+                : # Skip this line
+            else
+                echo "$line" >> "$temp_file"
+            fi
+        done < "$override_file"
+
+        if [[ -s "$temp_file" ]] && grep -q "[^[:space:]]" "$temp_file"; then
+            mv "$temp_file" "$override_file"
+            echo "  Removed hibernation bypass (preserved other settings)"
+        else
+            rm -f "$override_file"
+            rmdir /etc/systemd/system/systemd-logind.service.d 2>/dev/null || true
+            rm -f "$temp_file"
+            echo "  Removed override file"
+        fi
+    fi
+fi
+
+echo "Step 4: Removing GRUB resume parameters..."
+starter=steamenv_boot
+cfg=/boot/efi/EFI/steamos/grub.cfg
+remount=false
+
+# HoloISO
+if [[ -f /boot/grub/grub.cfg ]]; then
+    starter=linux
+    cfg=/boot/grub/grub.cfg
+    remount=true
+fi
+
+if [[ -e "$cfg" ]] && grep -q "resume=/dev/disk/by-uuid" "$cfg"; then
+    if $remount; then
+        steamos-readonly disable 2>/dev/null || true
+    fi
+
+    sed -i -E 's/ resume=[^ ]*//g' "$cfg"
+    sed -i -E 's/ resume_offset=[0-9]*//g' "$cfg"
+    sed -i -E 's/ rtc_cmos.use_acpi_alarm=1//g' "$cfg"
+
+    if $remount; then
+        steamos-readonly enable 2>/dev/null || true
+    fi
+
+    echo "  Removed from GRUB"
+fi
+
+echo "Step 5: Swapfile management..."
+function is_btrfs {
+    local fstype=$(findmnt -no FSTYPE -T /home)
+    [[ "$fstype" == "btrfs" ]]
+}
+
+if is_btrfs; then
+    swapfile_path="/home/@swapfile/swapfile"
+else
+    swapfile_path="/home/swapfile"
+fi
+
+if [[ -f "$swapfile_path" ]] && [[ "$RESIZE_SWAPFILE" == "true" ]]; then
+    echo "  Resizing swapfile to 1GB..."
+    swapoff "$swapfile_path" 2>/dev/null || true
+
+    if is_btrfs; then
+        rm -f "$swapfile_path"
+        truncate -s 0 "$swapfile_path"
+        chattr +C "$swapfile_path"
+        fallocate -l 1G "$swapfile_path"
+        chmod 600 "$swapfile_path"
+        mkswap "$swapfile_path"
+        swapon "$swapfile_path"
+    else
+        dd if=/dev/zero of="$swapfile_path" bs=1G count=1 status=none
+        chmod 600 "$swapfile_path"
+        mkswap "$swapfile_path"
+        swapon "$swapfile_path"
+    fi
+
+    echo "  Swapfile resized to 1GB"
+elif [[ -f "$swapfile_path" ]]; then
+    swapon "$swapfile_path" 2>/dev/null || true
+    echo "  Swapfile kept at current size"
+fi
+
+echo "Step 6: Reloading systemd..."
+systemctl daemon-reload
+
+echo "Step 7: Removing extension..."
+extension_file="/var/lib/extensions/steamos-extension-hibernate-after-sleep.raw"
+if [[ -f "$extension_file" ]]; then
+    rm -f "$extension_file"
+    systemd-sysext refresh 2>/dev/null || true
+    echo "  Extension removed"
+fi
+
+if [[ "$REMOVE_UNINSTALLER" == "true" ]]; then
+    if [[ -f "/home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh" ]]; then
+        rm -f /home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh
+        echo "  Removed uninstall script"
+    fi
+fi
+
+echo "Uninstall complete. Please reboot for all changes to take effect."
