@@ -64,6 +64,11 @@ for ext_dir in "$ROOT_DIR"/src/steamos-extension-*/; do
     if [[ -f "$ext_dir/uninstall" ]]; then
         cp "$ext_dir/uninstall" "$DIST_DIR/$ext_name.uninstall"
     fi
+
+    # Copy README
+    if [[ -f "$ext_dir/README.md" ]]; then
+        cp "$ext_dir/README.md" "$DIST_DIR/$ext_name.readme"
+    fi
 done
 
 echo "  Copied manifests and scripts"

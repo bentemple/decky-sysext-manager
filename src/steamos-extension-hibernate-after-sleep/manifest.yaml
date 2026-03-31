@@ -3,6 +3,7 @@ id: "hibernate-after-sleep"
 description: "Auto-hibernate after configurable suspend time to save battery"
 version: "1.0.0"
 category: "power"
+status: release
 
 # Activation behavior
 activation:
@@ -19,7 +20,7 @@ config:
       default: 60
       unit: "min"
       min: 5
-      max: 480
+      max: 960
       step: 5
 
     - id: TargetSwapFileSizeInGbs

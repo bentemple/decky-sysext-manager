@@ -15,7 +15,8 @@ BUNDLED_EXTENSIONS_DIR = os.path.join(PLUGIN_DIR, "dist", "extensions")
 
 
 class Plugin:
-    _active_extensions: set = set()
+    def __init__(self):
+        self._active_extensions = set()
 
     async def _main(self):
         decky.logger.info("SteamOS Extensions plugin loaded")
@@ -26,35 +27,44 @@ class Plugin:
 
     async def _refresh_active_extensions(self):
         """Get list of extensions currently active via systemd-sysext."""
+        self._active_extensions = set()
         try:
+            # Parse text output from systemd-sysext list
+            # Output format:
+            # NAME                                    TYPE PATH
+            # steamos-extension-loader                raw  /var/lib/extensions/...
             result = subprocess.run(
-                ["systemd-sysext", "list", "--json=short"],
+                ["sudo", "systemd-sysext", "list", "--no-legend"],
                 capture_output=True, text=True, timeout=10
             )
+            decky.logger.info(f"systemd-sysext list output: {result.stdout!r}")
             if result.returncode == 0:
-                import json
-                data = json.loads(result.stdout)
-                self._active_extensions = {ext.get("name", "") for ext in data}
-            else:
-                # Fallback: parse text output
-                result = subprocess.run(
-                    ["systemd-sysext", "list"],
-                    capture_output=True, text=True, timeout=10
-                )
-                self._active_extensions = set()
-                for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+                for line in result.stdout.strip().split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    # NAME column is first, space-separated
                     parts = line.split()
                     if parts:
-                        self._active_extensions.add(parts[0])
+                        ext_name = parts[0]
+                        if ext_name.startswith("steamos-extension-"):
+                            self._active_extensions.add(ext_name)
+                            decky.logger.debug(f"Found active extension: {ext_name}")
+                decky.logger.info(f"Active extensions: {self._active_extensions}")
+            else:
+                decky.logger.warning(f"systemd-sysext list failed (rc={result.returncode}): {result.stderr}")
         except Exception as e:
             decky.logger.warning(f"Failed to get active extensions: {e}")
-            self._active_extensions = set()
 
     def _get_extension_status(self, ext_id: str) -> str:
         """Get status: active, pending, or disabled."""
-        raw_filename = f"steamos-extension-{ext_id}.raw"
-        raw_exists = os.path.isfile(os.path.join(EXTENSIONS_DIR, raw_filename))
-        is_active = f"steamos-extension-{ext_id}" in self._active_extensions
+        ext_name = f"steamos-extension-{ext_id}"
+        raw_filename = f"{ext_name}.raw"
+        raw_path = os.path.join(EXTENSIONS_DIR, raw_filename)
+        raw_exists = os.path.isfile(raw_path)
+        is_active = ext_name in self._active_extensions
+
+        decky.logger.info(f"Status check for '{ext_id}': ext_name='{ext_name}', raw_path='{raw_path}', raw_exists={raw_exists}, is_active={is_active}, active_set={self._active_extensions}")
 
         if raw_exists and is_active:
             return "active"
@@ -83,14 +93,26 @@ class Plugin:
                         manifest = yaml.safe_load(f)
 
                     ext_id = manifest.get("id", filename.replace(".yaml", ""))
+                    ext_name = filename.replace(".yaml", "")
                     raw_filename = f"steamos-extension-{ext_id}.raw"
                     status = self._get_extension_status(ext_id)
+
+                    # Read README if available
+                    readme_path = os.path.join(BUNDLED_EXTENSIONS_DIR, f"{ext_name}.readme")
+                    readme = ""
+                    if os.path.isfile(readme_path):
+                        try:
+                            with open(readme_path, "r") as f:
+                                readme = f.read()
+                        except Exception as e:
+                            decky.logger.warning(f"Error reading README for {ext_name}: {e}")
 
                     extensions.append({
                         "manifest": manifest,
                         "enabled": status != "disabled",
                         "status": status,
                         "raw_file": raw_filename,
+                        "readme": readme,
                     })
                 except Exception as e:
                     decky.logger.error(f"Error loading manifest {filename}: {e}")
@@ -106,6 +128,19 @@ class Plugin:
             "enabled": enabled,
             "raw_file": raw_filename,
         }
+
+    def _get_activation_mode(self, ext_id: str) -> str:
+        """Get the activation mode for an extension from its manifest."""
+        ext_name = f"steamos-extension-{ext_id}"
+        manifest_path = os.path.join(BUNDLED_EXTENSIONS_DIR, f"{ext_name}.yaml")
+        try:
+            if os.path.isfile(manifest_path):
+                with open(manifest_path, "r") as f:
+                    manifest = yaml.safe_load(f)
+                    return manifest.get("activation", {}).get("mode", "reboot")
+        except Exception as e:
+            decky.logger.warning(f"Error reading manifest for {ext_id}: {e}")
+        return "reboot"  # Default to requiring reboot
 
     async def enable_extension(self, ext_id: str) -> dict:
         """Enable an extension by copying its .raw file to /var/lib/extensions/."""
@@ -123,13 +158,28 @@ class Plugin:
             # Copy the extension file
             subprocess.run(["cp", source, dest], check=True)
 
-            # Try to refresh sysext
-            try:
-                subprocess.run(["systemd-sysext", "refresh"], check=True, timeout=30)
-            except Exception as e:
-                decky.logger.warning(f"sysext refresh failed (may need reboot): {e}")
+            # Check activation mode
+            activation_mode = self._get_activation_mode(ext_id)
+            needs_reboot = True
 
-            return {"success": True, "needs_reboot": True}
+            if activation_mode in ("auto", "hot-reload"):
+                # Try to refresh sysext - if successful, no reboot needed
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                    await self._refresh_active_extensions()
+                    needs_reboot = False
+                    decky.logger.info(f"Extension {ext_id} activated via hot-reload")
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed, reboot required: {e}")
+                    needs_reboot = True
+            else:
+                # Mode is "reboot" - try refresh but always require reboot
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed: {e}")
+
+            return {"success": True, "needs_reboot": needs_reboot}
         except Exception as e:
             decky.logger.error(f"Error enabling extension {ext_id}: {e}")
             return {"success": False, "error": str(e)}
@@ -159,13 +209,28 @@ class Plugin:
             if os.path.isfile(raw_path):
                 os.remove(raw_path)
 
-            # Try to refresh sysext
-            try:
-                subprocess.run(["systemd-sysext", "refresh"], check=True, timeout=30)
-            except Exception as e:
-                decky.logger.warning(f"sysext refresh failed (may need reboot): {e}")
+            # Check activation mode
+            activation_mode = self._get_activation_mode(ext_id)
+            needs_reboot = True
 
-            return {"success": True, "needs_reboot": True}
+            if activation_mode in ("auto", "hot-reload"):
+                # Try to refresh sysext - if successful, no reboot needed
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                    await self._refresh_active_extensions()
+                    needs_reboot = False
+                    decky.logger.info(f"Extension {ext_id} deactivated via hot-reload")
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed, reboot required: {e}")
+                    needs_reboot = True
+            else:
+                # Mode is "reboot" - try refresh but always require reboot
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed: {e}")
+
+            return {"success": True, "needs_reboot": needs_reboot}
         except Exception as e:
             decky.logger.error(f"Error disabling extension {ext_id}: {e}")
             return {"success": False, "error": str(e)}
@@ -245,7 +310,7 @@ class Plugin:
     async def reboot(self) -> dict:
         """Trigger a system reboot."""
         try:
-            subprocess.run(["systemctl", "reboot"], check=True)
+            subprocess.run(["sudo", "systemctl", "reboot"], check=True)
             return {"success": True}
         except Exception as e:
             decky.logger.error(f"Error triggering reboot: {e}")

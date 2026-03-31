@@ -38,6 +38,7 @@ export interface ExtensionManifest {
   version: string;
   category: string;
   required?: boolean;
+  status?: "release" | "experimental" | "disabled";  // defaults to "experimental"
   activation: ActivationSection;
   config?: ConfigSection;
   configure?: { script: string };
@@ -51,6 +52,7 @@ export interface Extension {
   enabled: boolean;
   status: ExtensionStatus;
   raw_file: string;
+  readme: string;
 }
 
 export interface ExtensionConfig {

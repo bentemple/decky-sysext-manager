@@ -5,17 +5,28 @@ import {
   Spinner,
   Navigation,
 } from "@decky/ui";
-import { FaCog } from "react-icons/fa";
-import { Extension } from "../types/manifest";
-import { StatusIcon } from "./StatusIcon";
+import { FaCog, FaCheck, FaClock, FaTimes } from "react-icons/fa";
+import { Extension, ExtensionStatus } from "../types/manifest";
 
-interface QuickAccessViewProps {
+// Status icon component
+function StatusIcon({ status }: { status: ExtensionStatus }) {
+  switch (status) {
+    case "active":
+      return <FaCheck style={{ color: "#2ecc71", marginRight: 8 }} />;
+    case "pending":
+      return <FaClock style={{ color: "#f1c40f", marginRight: 8 }} />;
+    default:
+      return <FaTimes style={{ color: "#95a5a6", marginRight: 8 }} />;
+  }
+}
+
+interface QuickAccessPanelProps {
   extensions: Extension[];
   loading: boolean;
   error: string | null;
 }
 
-export function QuickAccessView({ extensions, loading, error }: QuickAccessViewProps) {
+export function QuickAccessPanel({ extensions, loading, error }: QuickAccessPanelProps) {
   if (loading) {
     return (
       <PanelSection>
@@ -36,11 +47,9 @@ export function QuickAccessView({ extensions, loading, error }: QuickAccessViewP
     );
   }
 
-  // Find loader extension
   const loader = extensions.find((e) => e.manifest.id === "loader");
   const loaderActive = loader?.status === "active";
 
-  // Get enabled extensions (active or pending), excluding loader
   const enabledExtensions = extensions.filter(
     (e) => e.manifest.id !== "loader" && (e.status === "active" || e.status === "pending")
   );
@@ -54,6 +63,21 @@ export function QuickAccessView({ extensions, loading, error }: QuickAccessViewP
 
   return (
     <>
+      {/* Configure Button */}
+      <PanelSection>
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            onClick={() => Navigation.Navigate("/sysext-extensions/settings")}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FaCog style={{ marginRight: 8 }} />
+              Configure Extensions
+            </div>
+          </ButtonItem>
+        </PanelSectionRow>
+      </PanelSection>
+
       {/* Status Section */}
       <PanelSection title="Status">
         <PanelSectionRow>
@@ -77,21 +101,6 @@ export function QuickAccessView({ extensions, loading, error }: QuickAccessViewP
           ))}
         </PanelSection>
       )}
-
-      {/* Configure Button */}
-      <PanelSection>
-        <PanelSectionRow>
-          <ButtonItem
-            layout="below"
-            onClick={() => Navigation.Navigate("/steamos-extensions/settings")}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <FaCog style={{ marginRight: 8 }} />
-              Configure Extensions
-            </div>
-          </ButtonItem>
-        </PanelSectionRow>
-      </PanelSection>
     </>
   );
 }

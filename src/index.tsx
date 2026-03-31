@@ -1,18 +1,16 @@
-import {
-  staticClasses,
-} from "@decky/ui";
+import { staticClasses } from "@decky/ui";
 import { definePlugin, routerHook } from "@decky/api";
 import { FaCogs } from "react-icons/fa";
 
 import { useExtensions } from "./decky-plugin/hooks/useExtensions";
-import { QuickAccessView } from "./decky-plugin/components/QuickAccessView";
-import { SettingsPage } from "./decky-plugin/components/SettingsPage";
+import { QuickAccessPanel } from "./decky-plugin/components/QuickAccessPanel";
+import { SettingsView } from "./decky-plugin/components/SettingsView";
 
 function QuickAccessContent() {
   const { extensions, loading, error } = useExtensions();
 
   return (
-    <QuickAccessView
+    <QuickAccessPanel
       extensions={extensions}
       loading={loading}
       error={error}
@@ -20,40 +18,22 @@ function QuickAccessContent() {
   );
 }
 
-function SettingsPageContent() {
-  const {
-    extensions,
-    enable,
-    disable,
-    triggerReboot,
-  } = useExtensions();
-
-  return (
-    <SettingsPage
-      extensions={extensions}
-      onEnable={enable}
-      onDisable={disable}
-      onReboot={triggerReboot}
-    />
-  );
-}
-
 export default definePlugin(() => {
-  console.log("SteamOS Extensions plugin initializing");
+  console.log("Sysext Extensions plugin initializing");
 
   // Register settings page route
-  routerHook.addRoute("/steamos-extensions/settings", () => <SettingsPageContent />);
+  routerHook.addRoute("/sysext-extensions/settings", SettingsView, {
+    exact: true,
+  });
 
   return {
-    name: "SteamOS Extensions",
-    titleView: (
-      <div className={staticClasses.Title}>SteamOS Extensions</div>
-    ),
+    name: "Sysext Extensions",
+    title: <div className={staticClasses.Title}>Sysext Extensions</div>,
     content: <QuickAccessContent />,
     icon: <FaCogs />,
     onDismount() {
-      console.log("SteamOS Extensions plugin unloading");
-      routerHook.removeRoute("/steamos-extensions/settings");
+      console.log("Sysext Extensions plugin unloading");
+      routerHook.removeRoute("/sysext-extensions/settings");
     },
   };
 });
