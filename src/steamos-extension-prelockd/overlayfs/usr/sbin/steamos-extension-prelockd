@@ -4,8 +4,9 @@ from ctypes import CDLL
 from json import dump, load
 from mmap import ACCESS_READ, mmap
 from os import getpid, listdir, path, sysconf, sysconf_names, times
-from re import error as re_error, search
+from re import search
 from signal import SIGHUP, SIGINT, SIGQUIT, SIGTERM, signal
+from sre_constants import error as invalid_re
 from sys import argv, exit, stderr, stdout
 from time import monotonic, process_time, sleep
 
@@ -45,7 +46,7 @@ def valid_re(reg_exp):
     """
     try:
         search(reg_exp, '')
-    except re_error:
+    except invalid_re:
         errprint('Invalid config: invalid regexp: {}'.format(reg_exp))
         exit(1)
 
@@ -231,7 +232,7 @@ def get_current_set():
             if lifetime >= min_save_lifetime:
                 uniq_map_d[uniq_id] = uniq_map_set
 
-        except (FileNotFoundError, ProcessLookupError) as e:
+        except FileNotFoundError as e:
             errprint(e)
             continue
 

@@ -1,0 +1,5 @@
+# Pinned upstream version for prelockd
+# Update commit to pull from a different version
+UPSTREAM_REPO=hakavlad/prelockd
+UPSTREAM_VERSION=v0.9
+UPSTREAM_COMMIT=2036d7b191f4e8858eac2ce3f61fd4db787c94c2

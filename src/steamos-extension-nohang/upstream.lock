@@ -1,0 +1,5 @@
+# Pinned upstream version for nohang
+# Update commit to pull from a different version
+UPSTREAM_REPO=hakavlad/nohang
+UPSTREAM_VERSION=v0.3.0
+UPSTREAM_COMMIT=bf477da78041a1fce8a82d04da422ef60e86c556
