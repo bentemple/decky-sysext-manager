@@ -8,6 +8,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 ASSETS_DIR="$ROOT_DIR/assets/extensions"
 DIST_DIR="$ROOT_DIR/dist/extensions"
+PY_MODULES_DIR="$ROOT_DIR/py_modules"
+
+echo "Installing Python dependencies..."
+if [[ -f "$ROOT_DIR/requirements.txt" ]]; then
+    VENV_DIR="$ROOT_DIR/.venv"
+    if [[ ! -d "$VENV_DIR" ]]; then
+        python3 -m venv "$VENV_DIR"
+    fi
+    "$VENV_DIR/bin/pip" install --target="$PY_MODULES_DIR" -r "$ROOT_DIR/requirements.txt" --upgrade
+    echo "  Python dependencies installed to py_modules/"
+else
+    echo "  WARNING: No requirements.txt found"
+fi
 
 echo "Bundling extensions..."
 

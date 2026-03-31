@@ -1,11 +1,16 @@
 import os
+import sys
 import subprocess
+
+# Add bundled dependencies to path
+PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, os.path.join(PLUGIN_DIR, "py_modules"))
+
 import yaml
 import decky
 
 # Paths
 EXTENSIONS_DIR = "/var/lib/extensions"
-PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
 BUNDLED_EXTENSIONS_DIR = os.path.join(PLUGIN_DIR, "dist", "extensions")
 
 

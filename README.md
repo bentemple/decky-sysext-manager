@@ -11,6 +11,18 @@ I also added a Steamdeck Hibernate After Sleep extension, as that was my first p
 
 I provide no warranties for this code. Modifying your steamdeck's software could potentially make your device unbootable. Typically this is recoverable from a bootable USB drive, but proceed at your own risk.
 
+## External Dependencies
+
+Some extensions include or download third-party software:
+
+| Extension | Dependency | License | Notes |
+|-----------|------------|---------|-------|
+| `steamos-extension-nohang` | [nohang](https://github.com/hakavlad/nohang) | MIT | Downloaded at build time |
+| `steamos-extension-prelockd` | [prelockd](https://github.com/hakavlad/prelockd) | MIT | Downloaded at build time |
+| `steamos-extension-tailscale` | [Tailscale](https://tailscale.com) | BSD-3-Clause | Downloaded at runtime |
+| `steamos-extension-irqbalance` | [irqbalance](https://github.com/Irqbalance/irqbalance) | GPL-2.0 | Statically compiled binary |
+| `steamos-extension-preload` | [preload](https://sourceforge.net/projects/preload/) | GPL-2.0 | Statically compiled binary |
+
 ## Quick Start
 
 Copy any desired extensions into `/var/lib/extensions/` along with the `steamos-extension-loader.raw` extension.

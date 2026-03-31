@@ -4,35 +4,42 @@ set -ex
 # Sort all preset files (check both old and new structure)
 find . -path '*/usr/*' -iname '*.preset' | xargs -rI{} sort -o {} {}
 
-# Download external dependencies
-# Note: paths updated for overlayfs structure when extensions are migrated
+# Download external dependencies from pinned commits
+# Each extension with external deps has an upstream.lock file
+
 function download_nohang() {
     local base_dir=$1
-    curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/LICENSE' > $base_dir/usr/share/steamos-extension-nohang-LICENSE
-    curl 'https://raw.githubusercontent.com/hakavlad/nohang/refs/heads/master/src/nohang' > $base_dir/usr/sbin/steamos-extension-nohang
+    local ext_dir=$2
+    source $ext_dir/upstream.lock
+    local base_url="https://raw.githubusercontent.com/$UPSTREAM_REPO/$UPSTREAM_COMMIT"
+    curl "$base_url/LICENSE" > $base_dir/usr/share/steamos-extension-nohang-LICENSE
+    curl "$base_url/src/nohang" > $base_dir/usr/sbin/steamos-extension-nohang
     chmod 644 $base_dir/usr/share/steamos-extension-nohang-LICENSE
     chmod 755 $base_dir/usr/sbin/steamos-extension-nohang
 }
 
 function download_prelockd() {
     local base_dir=$1
-    curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/LICENSE' > $base_dir/usr/share/steamos-extension-prelockd-LICENSE
-    curl 'https://raw.githubusercontent.com/hakavlad/prelockd/refs/heads/master/prelockd' > $base_dir/usr/sbin/steamos-extension-prelockd
+    local ext_dir=$2
+    source $ext_dir/upstream.lock
+    local base_url="https://raw.githubusercontent.com/$UPSTREAM_REPO/$UPSTREAM_COMMIT"
+    curl "$base_url/LICENSE" > $base_dir/usr/share/steamos-extension-prelockd-LICENSE
+    curl "$base_url/prelockd" > $base_dir/usr/sbin/steamos-extension-prelockd
     chmod 644 $base_dir/usr/share/steamos-extension-prelockd-LICENSE
     chmod 755 $base_dir/usr/sbin/steamos-extension-prelockd
 }
 
 # Download to correct location based on structure
 if [[ -d src/steamos-extension-nohang/overlayfs ]]; then
-    download_nohang src/steamos-extension-nohang/overlayfs
+    download_nohang src/steamos-extension-nohang/overlayfs src/steamos-extension-nohang
 else
-    download_nohang src/steamos-extension-nohang
+    download_nohang src/steamos-extension-nohang src/steamos-extension-nohang
 fi
 
 if [[ -d src/steamos-extension-prelockd/overlayfs ]]; then
-    download_prelockd src/steamos-extension-prelockd/overlayfs
+    download_prelockd src/steamos-extension-prelockd/overlayfs src/steamos-extension-prelockd
 else
-    download_prelockd src/steamos-extension-prelockd
+    download_prelockd src/steamos-extension-prelockd src/steamos-extension-prelockd
 fi
 
 function compress() {

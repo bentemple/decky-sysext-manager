@@ -23,6 +23,8 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+py_modules/
+.venv/
 
 # Decky plugin
 decky_plugin.py
