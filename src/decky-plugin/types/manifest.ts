@@ -44,9 +44,12 @@ export interface ExtensionManifest {
   uninstall?: UninstallSection;
 }
 
+export type ExtensionStatus = "active" | "pending" | "disabled";
+
 export interface Extension {
   manifest: ExtensionManifest;
   enabled: boolean;
+  status: ExtensionStatus;
   raw_file: string;
 }
 

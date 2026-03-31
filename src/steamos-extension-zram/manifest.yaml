@@ -3,6 +3,7 @@ id: "zram"
 description: "RAM-based compressed swap and ext4 cache (experimental)"
 version: "1.0.0"
 category: "performance"
+status: disabled
 
 activation:
   mode: reboot

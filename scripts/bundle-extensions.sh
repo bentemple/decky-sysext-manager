@@ -27,21 +27,32 @@ echo "Bundling extensions..."
 # Create dist directory
 mkdir -p "$DIST_DIR"
 
-# Copy .raw files from assets
-if ls "$ASSETS_DIR"/*.raw 1>/dev/null 2>&1; then
-    cp "$ASSETS_DIR"/*.raw "$DIST_DIR/"
-    echo "  Copied .raw files"
-else
-    echo "  WARNING: No .raw files found in assets/extensions/"
-fi
+# Helper to check if extension is disabled
+is_disabled() {
+    local manifest="$1"
+    grep -qE '^status:\s*disabled' "$manifest" 2>/dev/null
+}
 
-# Copy manifest/configure/uninstall from source directories
+# Copy manifest/configure/uninstall from source directories (skip disabled)
 for ext_dir in "$ROOT_DIR"/src/steamos-extension-*/; do
     ext_name=$(basename "$ext_dir")
+    manifest="$ext_dir/manifest.yaml"
+
+    # Skip disabled extensions
+    if [[ -f "$manifest" ]] && is_disabled "$manifest"; then
+        echo "  Skipping disabled extension: $ext_name"
+        continue
+    fi
+
+    # Copy .raw file if it exists
+    raw_file="$ASSETS_DIR/$ext_name.raw"
+    if [[ -f "$raw_file" ]]; then
+        cp "$raw_file" "$DIST_DIR/"
+    fi
 
     # Copy manifest
-    if [[ -f "$ext_dir/manifest.yaml" ]]; then
-        cp "$ext_dir/manifest.yaml" "$DIST_DIR/$ext_name.yaml"
+    if [[ -f "$manifest" ]]; then
+        cp "$manifest" "$DIST_DIR/$ext_name.yaml"
     fi
 
     # Copy configure script

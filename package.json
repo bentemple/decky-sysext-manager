@@ -6,6 +6,7 @@
   "scripts": {
     "build": "rollup -c && ./scripts/bundle-extensions.sh",
     "watch": "rollup -c -w",
+    "clean": "rm -rf dist/ assets/extensions/*.raw",
     "validate": "./scripts/validate-extensions.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

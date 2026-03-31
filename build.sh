@@ -66,9 +66,17 @@ if [[ ! -d $assets_dir ]]; then
 fi
 local temp=$(mktemp -d)
 for dir in src/steamos-extension-*(/N); do
+	local ext_name=$(basename $dir)
+	local manifest=$dir/manifest.yaml
+
+	# Skip disabled extensions
+	if [[ -f $manifest ]] && grep -qE '^status:\s*disabled' $manifest; then
+		echo "Skipping disabled extension: $ext_name"
+		continue
+	fi
+
 	# Check for new overlayfs structure, fall back to old structure
 	local source_dir=$dir
-	local ext_name=$(basename $dir)
 	if [[ -d $dir/overlayfs ]]; then
 		source_dir=$dir/overlayfs
 	fi
