@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   SidebarNavigation,
   PanelSection,
@@ -63,7 +63,7 @@ function ExtensionRow({
         cursor: "pointer",
         borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}
-      onActivate={() => onSelect(extension)}
+      onActivate={() => handleSelectExtension(extension)}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -172,6 +172,19 @@ function ExtensionListPage({
 }) {
   const [selectedExt, setSelectedExt] = useState<Extension | null>(null);
   const [pendingReboot, setPendingReboot] = useState(false);
+  const scrollPositionRef = useRef<number>(0);
+
+  const handleSelectExtension = useCallback((ext: Extension) => {
+    scrollPositionRef.current = window.scrollY;
+    setSelectedExt(ext);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    setSelectedExt(null);
+    setTimeout(() => {
+      window.scrollTo(0, scrollPositionRef.current);
+    }, 0);
+  }, []);
 
   const loaderEnabled = loader?.status === "active" || loader?.status === "pending";
 

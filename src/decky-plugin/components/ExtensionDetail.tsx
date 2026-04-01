@@ -1,6 +1,7 @@
 import { PanelSection, PanelSectionRow, ToggleField, Focusable } from "@decky/ui";
 import { FaChevronLeft } from "react-icons/fa";
 import { Extension, ExtensionStatus } from "../types/manifest";
+import { useEffect } from "react";
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
@@ -43,6 +44,11 @@ export function ExtensionDetail({ extension, loaderEnabled, onBack, onToggle }: 
   const isLoader = manifest.id === "loader";
   const isEnabled = status === "active" || status === "pending";
   const canToggle = isLoader || loaderEnabled;
+
+  // Scroll to top when detail page opens
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   return (
     <>
