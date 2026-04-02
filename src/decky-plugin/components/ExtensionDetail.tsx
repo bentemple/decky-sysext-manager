@@ -235,6 +235,7 @@ interface ExtensionDetailProps {
   onLoadConfig: (extId: string) => Promise<ExtensionConfig>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
   onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  onUpdateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
 }
 
 export function ExtensionDetail({
@@ -245,6 +246,7 @@ export function ExtensionDetail({
   onLoadConfig,
   onSaveConfig,
   onUpdateManager,
+  onUpdateExt,
 }: ExtensionDetailProps) {
   const { manifest, status, readme } = extension;
   const isLoader = manifest.id === "loader";
@@ -266,6 +268,7 @@ export function ExtensionDetail({
     loading: true,
   });
   const [updating, setUpdating] = useState(false);
+  const [updatingExt, setUpdatingExt] = useState(false);
 
   const isDirty = hasConfig && JSON.stringify(configValues) !== JSON.stringify(savedValues);
 
@@ -364,14 +367,31 @@ export function ExtensionDetail({
     }
   }, [manifest.id, manifest.name, onUpdateManager, loadUpdateInfo]);
 
+  const handleUpdateExt = useCallback(async () => {
+    setUpdatingExt(true);
+    try {
+      const result = await onUpdateExt(manifest.id);
+      if (result.success) {
+        toaster.toast({
+          title: `${manifest.name} Updated`,
+          body: result.needs_reboot ? "Extension updated. Reboot required." : "Extension updated.",
+        });
+      } else {
+        toaster.toast({ title: "Update Failed", body: result.error || "Unknown error" });
+      }
+    } finally {
+      setUpdatingExt(false);
+    }
+  }, [manifest.id, manifest.name, onUpdateExt]);
+
   const handleBack = useCallback(() => {
     if (isDirty) {
       showModal(
         <ConfirmModal
           strTitle="Unsaved Changes"
           strDescription="You have unsaved settings changes. Apply them before leaving?"
-          strOKButtonText="Apply & Back"
-          strCancelButtonText="Discard & Back"
+          strOKButtonText="Apply"
+          strCancelButtonText="Discard"
           onOK={async () => {
             await handleApply();
             onBack();
@@ -500,42 +520,68 @@ export function ExtensionDetail({
       </PanelSection>
 
       {/* Update */}
-      {hasUpdateManager && (
+      {(hasUpdateManager || extension.bundled_update_available) && (
         <PanelSection title="Update">
-          {updateInfo.loading ? (
-            <PanelSectionRow>
-              <div style={{ color: "#8b929a", fontSize: 13 }}>Checking for updates...</div>
-            </PanelSectionRow>
-          ) : updateInfo.error ? (
-            <PanelSectionRow>
-              <div style={{ color: "#e74c3c", fontSize: 13 }}>{updateInfo.error}</div>
-            </PanelSectionRow>
-          ) : updateInfo.updateAvailable ? (
+          {/* Bundled extension .raw update */}
+          {extension.bundled_update_available && (
             <>
               <PanelSectionRow>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                   <FaUpload style={{ color: "#f39c12" }} />
                   <span style={{ color: "#f39c12" }}>
-                    Update available: v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
+                    Extension update available: v{manifest.version}
                   </span>
                 </div>
               </PanelSectionRow>
               <PanelSectionRow>
                 <ButtonItem
                   layout="below"
-                  onClick={handleUpdate}
-                  disabled={updating}
+                  onClick={handleUpdateExt}
+                  disabled={updatingExt}
                 >
-                  {updating ? "Updating..." : "Update Now"}
+                  {updatingExt ? "Updating Extension..." : "Update Extension"}
                 </ButtonItem>
               </PanelSectionRow>
             </>
-          ) : (
-            <PanelSectionRow>
-              <div style={{ color: "#8b929a", fontSize: 13 }}>
-                Up to date{updateInfo.currentVersion ? `: v${updateInfo.currentVersion}` : ""}
-              </div>
-            </PanelSectionRow>
+          )}
+
+          {/* Upstream software update (via update-manager) */}
+          {hasUpdateManager && (
+            updateInfo.loading ? (
+              <PanelSectionRow>
+                <div style={{ color: "#8b929a", fontSize: 13 }}>Checking upstream version...</div>
+              </PanelSectionRow>
+            ) : updateInfo.error ? (
+              <PanelSectionRow>
+                <div style={{ color: "#e74c3c", fontSize: 13 }}>{updateInfo.error}</div>
+              </PanelSectionRow>
+            ) : updateInfo.updateAvailable ? (
+              <>
+                <PanelSectionRow>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <FaUpload style={{ color: "#f39c12" }} />
+                    <span style={{ color: "#f39c12" }}>
+                      Upstream update: v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
+                    </span>
+                  </div>
+                </PanelSectionRow>
+                <PanelSectionRow>
+                  <ButtonItem
+                    layout="below"
+                    onClick={handleUpdate}
+                    disabled={updating}
+                  >
+                    {updating ? "Updating..." : "Update Now"}
+                  </ButtonItem>
+                </PanelSectionRow>
+              </>
+            ) : (
+              <PanelSectionRow>
+                <div style={{ color: "#8b929a", fontSize: 13 }}>
+                  Upstream: up to date{updateInfo.currentVersion ? ` (v${updateInfo.currentVersion})` : ""}
+                </div>
+              </PanelSectionRow>
+            )
           )}
         </PanelSection>
       )}
@@ -571,7 +617,7 @@ export function ExtensionDetail({
                 onClick={handleApply}
                 disabled={configSaving}
               >
-                {configSaving ? "Applying..." : "Apply Settings"}
+                {configSaving ? "Applying..." : "Apply"}
               </ButtonItem>
             </PanelSectionRow>
           )}

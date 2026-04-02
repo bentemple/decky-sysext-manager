@@ -52,7 +52,7 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
   useEffect(() => {
     if (enabledWithUpdateManager.length === 0) return;
 
-    // Mark all as checking
+    // Mark all as checking (only those not yet checked)
     setUpdateStates((prev) => {
       const next = { ...prev };
       for (const ext of enabledWithUpdateManager) {
@@ -151,13 +151,15 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
         <PanelSection title="Enabled">
           {enabledExtensions.map((ext) => {
             const state = updateStates[ext.manifest.id];
+            const hasAnyUpdate = ext.bundled_update_available || state?.available;
+            const isChecking = state?.checking && !ext.bundled_update_available;
             return (
               <PanelSectionRow key={ext.manifest.id}>
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <StatusIcon
                     status={ext.status}
-                    updateAvailable={state?.available}
-                    checkingUpdate={state?.checking}
+                    updateAvailable={hasAnyUpdate}
+                    checkingUpdate={isChecking}
                   />
                   <span>{ext.manifest.name}</span>
                 </div>

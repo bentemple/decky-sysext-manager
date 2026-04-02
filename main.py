@@ -3,6 +3,7 @@ import sys
 import subprocess
 import time
 import json
+import hashlib
 
 # Add bundled dependencies to path
 PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -59,6 +60,15 @@ class Plugin:
                 decky.logger.warning(f"systemd-sysext list failed (rc={result.returncode}): {result.stderr}")
         except Exception as e:
             decky.logger.warning(f"Failed to get active extensions: {e}")
+
+    @staticmethod
+    def _sha256(path: str) -> str:
+        """Return hex SHA256 of a file."""
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
 
     def _get_extension_status(self, ext_id: str) -> str:
         """Get status: active, pending, or disabled."""
@@ -119,6 +129,18 @@ class Plugin:
                         except Exception as e:
                             decky.logger.warning(f"Error reading README for {ext_name}: {e}")
 
+                    # Check if bundled .raw differs from installed .raw (extension itself needs updating)
+                    bundled_raw_path = os.path.join(BUNDLED_EXTENSIONS_DIR, raw_filename)
+                    installed_raw_path = os.path.join(EXTENSIONS_DIR, raw_filename)
+                    bundled_update_available = False
+                    if os.path.isfile(bundled_raw_path) and os.path.isfile(installed_raw_path):
+                        try:
+                            bundled_update_available = (
+                                self._sha256(bundled_raw_path) != self._sha256(installed_raw_path)
+                            )
+                        except Exception as e:
+                            decky.logger.warning(f"Could not compare .raw hashes for {ext_id}: {e}")
+
                     extensions.append({
                         "manifest": manifest,
                         "enabled": status != "disabled",
@@ -126,6 +148,7 @@ class Plugin:
                         "raw_file": raw_filename,
                         "readme": readme,
                         "has_update_manager": has_update_manager,
+                        "bundled_update_available": bundled_update_available,
                     })
                 except Exception as e:
                     decky.logger.error(f"Error loading manifest {filename}: {e}")
@@ -195,6 +218,43 @@ class Plugin:
             return {"success": True, "needs_reboot": needs_reboot}
         except Exception as e:
             decky.logger.error(f"Error enabling extension {ext_id}: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def update_extension(self, ext_id: str) -> dict:
+        """Update an installed extension by copying the bundled .raw over the installed one and refreshing sysext."""
+        raw_filename = f"steamos-extension-{ext_id}.raw"
+        source = os.path.join(BUNDLED_EXTENSIONS_DIR, raw_filename)
+        dest = os.path.join(EXTENSIONS_DIR, raw_filename)
+
+        if not os.path.isfile(source):
+            return {"success": False, "error": f"Bundled extension file not found: {source}"}
+        if not os.path.isfile(dest):
+            return {"success": False, "error": "Extension is not installed; use enable instead"}
+
+        try:
+            subprocess.run(["cp", source, dest], check=True)
+
+            activation_mode = self._get_activation_mode(ext_id)
+            needs_reboot = True
+
+            if activation_mode in ("auto", "hot-reload"):
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                    await self._refresh_active_extensions()
+                    needs_reboot = False
+                    decky.logger.info(f"Extension {ext_id} updated and hot-reloaded")
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed after update, reboot required: {e}")
+                    needs_reboot = True
+            else:
+                try:
+                    subprocess.run(["sudo", "systemd-sysext", "refresh"], check=True, timeout=30)
+                except Exception as e:
+                    decky.logger.warning(f"sysext refresh failed: {e}")
+
+            return {"success": True, "needs_reboot": needs_reboot}
+        except Exception as e:
+            decky.logger.error(f"Error updating extension {ext_id}: {e}")
             return {"success": False, "error": str(e)}
 
     async def disable_extension(self, ext_id: str, prompt_answers: dict = None) -> dict:

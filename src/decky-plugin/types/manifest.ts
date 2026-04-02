@@ -79,6 +79,7 @@ export interface Extension {
   raw_file: string;
   readme: string;
   has_update_manager: boolean;
+  bundled_update_available: boolean;
 }
 
 export interface ExtensionConfig {

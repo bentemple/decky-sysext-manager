@@ -5,6 +5,7 @@ import { Extension, ExtensionConfig } from "../types/manifest";
 const getExtensions = callable<[], Extension[]>("get_extensions");
 const enableExtension = callable<[ext_id: string], { success: boolean; needs_reboot?: boolean; error?: string }>("enable_extension");
 const disableExtension = callable<[ext_id: string, prompt_answers: Record<string, boolean>], { success: boolean; needs_reboot?: boolean; error?: string }>("disable_extension");
+const updateExtension = callable<[ext_id: string], { success: boolean; needs_reboot?: boolean; error?: string }>("update_extension");
 const getConfig = callable<[ext_id: string], ExtensionConfig>("get_config");
 const configureExtension = callable<[ext_id: string, config: Record<string, string | number>], { success: boolean; error?: string }>("configure_extension");
 const runUpdateManager = callable<[ext_id: string, flag: string], { success: boolean; output: string; error?: string }>("run_update_manager");
@@ -48,6 +49,14 @@ export function useExtensions() {
     return result;
   }, [refresh]);
 
+  const updateExt = useCallback(async (extId: string): Promise<{ success: boolean; needs_reboot?: boolean; error?: string }> => {
+    const result = await updateExtension(extId);
+    if (result.success) {
+      await refresh();
+    }
+    return result;
+  }, [refresh]);
+
   const loadConfig = useCallback(async (extId: string): Promise<ExtensionConfig> => {
     return await getConfig(extId);
   }, []);
@@ -71,6 +80,7 @@ export function useExtensions() {
     refresh,
     enable,
     disable,
+    updateExt,
     loadConfig,
     saveConfig,
     updateManager,

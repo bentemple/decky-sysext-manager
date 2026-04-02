@@ -171,6 +171,7 @@ function ExtensionListPage({
   showLoader,
   onEnable,
   onDisable,
+  onUpdateExt,
   onReboot,
   onLoadConfig,
   onSaveConfig,
@@ -181,6 +182,7 @@ function ExtensionListPage({
   showLoader: boolean;
   onEnable: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   onDisable: (extId: string, answers: Record<string, boolean>) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  onUpdateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   onReboot: () => Promise<{ success: boolean; error?: string }>;
   onLoadConfig: (extId: string) => Promise<any>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
@@ -287,6 +289,7 @@ function ExtensionListPage({
         onLoadConfig={onLoadConfig}
         onSaveConfig={onSaveConfig}
         onUpdateManager={onUpdateManager}
+        onUpdateExt={onUpdateExt}
       />
     );
   }
@@ -349,7 +352,7 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, enable, disable, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
+  const { extensions, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
 
   const loader = extensions.find((e) => e.manifest.id === "loader");
 
@@ -375,6 +378,7 @@ export function SettingsView() {
               showLoader={true}
               onEnable={enable}
               onDisable={disable}
+              onUpdateExt={updateExt}
               onReboot={triggerReboot}
               onLoadConfig={loadConfig}
               onSaveConfig={saveConfig}
@@ -392,6 +396,7 @@ export function SettingsView() {
               showLoader={false}
               onEnable={enable}
               onDisable={disable}
+              onUpdateExt={updateExt}
               onReboot={triggerReboot}
               onLoadConfig={loadConfig}
               onSaveConfig={saveConfig}
