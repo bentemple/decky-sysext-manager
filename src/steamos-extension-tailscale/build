@@ -22,12 +22,12 @@ mkdir -p "$OVERLAYFS_DIR/usr/lib/systemd/system/tailscaled.service.d"
 mkdir -p "$OVERLAYFS_DIR/usr/lib/systemd/system-preset"
 mkdir -p "$OVERLAYFS_DIR/usr/share"
 
-# Copy install script unchanged
-cp "$SUBMODULE_DIR/tailscale.sh" "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale"
-chmod 755 "$OVERLAYFS_DIR/usr/sbin/steamos-extension-tailscale"
+# Copy install script unchanged with its original filename
+mkdir -p "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale"
+cp "$SUBMODULE_DIR/tailscale.sh" "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale/tailscale.sh"
+chmod 755 "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale/tailscale.sh"
 
 # Copy override.conf to where the script expects it (WorkingDirectory in service points here)
-mkdir -p "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale"
 cp "$SUBMODULE_DIR/override.conf" "$OVERLAYFS_DIR/usr/share/steamos-extension-tailscale/override.conf"
 
 # Copy uninstall script

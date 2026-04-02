@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   SidebarNavigation,
   PanelSection,
@@ -63,7 +63,7 @@ function ExtensionRow({
         cursor: "pointer",
         borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}
-      onActivate={() => handleSelectExtension(extension)}
+      onActivate={() => onSelect(extension)}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -154,6 +154,16 @@ function sortCategories(categories: string[]): string[] {
   );
 }
 
+// Walk up the DOM to find the first scrollable ancestor
+function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
+  while (el && el !== document.body) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (overflowY === "auto" || overflowY === "scroll") return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 // Extension list page - shared between release and experimental tabs
 function ExtensionListPage({
   extensions,
@@ -162,6 +172,8 @@ function ExtensionListPage({
   onEnable,
   onDisable,
   onReboot,
+  onLoadConfig,
+  onSaveConfig,
 }: {
   extensions: Extension[];
   loader: Extension | undefined;
@@ -169,27 +181,46 @@ function ExtensionListPage({
   onEnable: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   onDisable: (extId: string, answers: Record<string, boolean>) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   onReboot: () => Promise<{ success: boolean; error?: string }>;
+  onLoadConfig: (extId: string) => Promise<any>;
+  onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
 }) {
   const [selectedExt, setSelectedExt] = useState<Extension | null>(null);
   const [pendingReboot, setPendingReboot] = useState(false);
-  const scrollPositionRef = useRef<number>(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const savedScrollTop = useRef<number>(0);
+
+  // Discover the scroll container once we have a DOM element to walk up from
+  useEffect(() => {
+    if (rootRef.current && !scrollContainerRef.current) {
+      scrollContainerRef.current = findScrollContainer(rootRef.current);
+    }
+  });
+
+  const loaderEnabled = loader?.status === "active" || loader?.status === "pending";
+  const categories = groupExtensionsByCategory(extensions);
+  const sortedCategories = sortCategories(Object.keys(categories));
 
   const handleSelectExtension = useCallback((ext: Extension) => {
-    scrollPositionRef.current = window.scrollY;
+    savedScrollTop.current = scrollContainerRef.current?.scrollTop ?? 0;
     setSelectedExt(ext);
+    // Scroll to top for the detail view
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0;
+      }
+    });
   }, []);
 
   const handleBack = useCallback(() => {
     setSelectedExt(null);
-    setTimeout(() => {
-      window.scrollTo(0, scrollPositionRef.current);
-    }, 0);
+    // Restore list scroll position after React re-renders
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = savedScrollTop.current;
+      }
+    });
   }, []);
-
-  const loaderEnabled = loader?.status === "active" || loader?.status === "pending";
-
-  const categories = groupExtensionsByCategory(extensions);
-  const sortedCategories = sortCategories(Object.keys(categories));
 
   const handleToggle = useCallback(
     async (ext: Extension, enable: boolean) => {
@@ -249,14 +280,16 @@ function ExtensionListPage({
       <ExtensionDetail
         extension={selectedExt}
         loaderEnabled={loaderEnabled}
-        onBack={() => setSelectedExt(null)}
+        onBack={handleBack}
         onToggle={handleToggle}
+        onLoadConfig={onLoadConfig}
+        onSaveConfig={onSaveConfig}
       />
     );
   }
 
   return (
-    <>
+    <div ref={rootRef}>
       {pendingReboot && (
         <PanelSection>
           <PanelSectionRow>
@@ -269,7 +302,7 @@ function ExtensionListPage({
 
       {showLoader && loader && (
         <PanelSection title="Required">
-          <ExtensionRow extension={loader} onSelect={setSelectedExt} />
+          <ExtensionRow extension={loader} onSelect={handleSelectExtension} />
         </PanelSection>
       )}
 
@@ -292,7 +325,7 @@ function ExtensionListPage({
             <ExtensionRow
               key={ext.manifest.id}
               extension={ext}
-              onSelect={setSelectedExt}
+              onSelect={handleSelectExtension}
             />
           ))}
         </PanelSection>
@@ -307,18 +340,16 @@ function ExtensionListPage({
           </PanelSectionRow>
         </PanelSection>
       )}
-    </>
+    </div>
   );
 }
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, enable, disable, triggerReboot } = useExtensions();
+  const { extensions, enable, disable, triggerReboot, loadConfig, saveConfig } = useExtensions();
 
-  // Find the loader (always shown in Extensions tab)
   const loader = extensions.find((e) => e.manifest.id === "loader");
 
-  // Filter extensions by stability status (default to experimental)
   const releaseExtensions = extensions.filter(
     (e) => e.manifest.id !== "loader" && e.manifest.status === "release"
   );
@@ -333,6 +364,7 @@ export function SettingsView() {
       pages={[
         {
           title: "Extensions",
+          hideTitle: true,
           content: (
             <ExtensionListPage
               extensions={releaseExtensions}
@@ -341,11 +373,14 @@ export function SettingsView() {
               onEnable={enable}
               onDisable={disable}
               onReboot={triggerReboot}
+              onLoadConfig={loadConfig}
+              onSaveConfig={saveConfig}
             />
           ),
         },
         {
           title: "Experimental",
+          hideTitle: true,
           content: (
             <ExtensionListPage
               extensions={experimentalExtensions}
@@ -354,11 +389,14 @@ export function SettingsView() {
               onEnable={enable}
               onDisable={disable}
               onReboot={triggerReboot}
+              onLoadConfig={loadConfig}
+              onSaveConfig={saveConfig}
             />
           ),
         },
         {
           title: "About",
+          hideTitle: true,
           content: <AboutPage />,
         },
       ]}

@@ -1,3 +1,14 @@
+export interface ConfigParameterSegment {
+  /** Percentage of the slider width this segment occupies (all segments must sum to 100) */
+  width: number;
+  /** Real value at the start of this segment */
+  from: number;
+  /** Real value at the end of this segment */
+  to: number;
+  /** Step size within this segment */
+  step: number;
+}
+
 export interface ConfigParameter {
   id: string;
   label: string;
@@ -8,6 +19,7 @@ export interface ConfigParameter {
   min?: number;
   max?: number;
   step?: number;
+  segments?: ConfigParameterSegment[];
   options?: { value: string; label: string }[];
 }
 

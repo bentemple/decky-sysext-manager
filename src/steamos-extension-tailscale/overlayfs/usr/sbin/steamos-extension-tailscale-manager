@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Manager script for Tailscale installation
+# Called by steamos-extension-tailscale.service on each boot.
+# Skips installation if Tailscale is already up to date; runs tailscale.sh otherwise.
+set -eu -o pipefail
+
+INSTALL_SCRIPT="/usr/share/steamos-extension-tailscale/tailscale.sh"
+TAILSCALE_BIN="/opt/tailscale/tailscaled"
+
+# Check if tailscaled is already installed and enabled
+if systemctl is-enabled --quiet tailscaled 2>/dev/null && [[ -x "$TAILSCALE_BIN" ]]; then
+    echo "Tailscale is already installed — checking for updates..."
+
+    # Get installed version
+    installed_version="$("$TAILSCALE_BIN" --version 2>/dev/null | head -1 | awk '{print $1}' || true)"
+
+    # Get latest stable version from pkgs.tailscale.com
+    latest_tarball="$(curl -sf 'https://pkgs.tailscale.com/stable/?mode=json' | jq -r .Tarballs.amd64 || true)"
+    latest_version="$(echo "$latest_tarball" | cut -d_ -f2 || true)"
+
+    if [[ -n "$installed_version" && -n "$latest_version" && "$installed_version" == "$latest_version" ]]; then
+        echo "Tailscale $installed_version is up to date — skipping install."
+        exit 0
+    fi
+
+    if [[ -n "$latest_version" ]]; then
+        echo "Update available: $installed_version → $latest_version. Installing..."
+    else
+        echo "Could not determine latest version — running installer to verify."
+    fi
+fi
+
+echo "Running Tailscale installer..."
+exec "$INSTALL_SCRIPT"

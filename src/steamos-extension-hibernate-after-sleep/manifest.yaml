@@ -20,8 +20,20 @@ config:
       default: 60
       unit: "min"
       min: 5
-      max: 960
-      step: 5
+      max: 10080
+      segments:
+        - width: 40
+          from: 5
+          to: 180
+          step: 5
+        - width: 40
+          from: 180
+          to: 1440
+          step: 60
+        - width: 20
+          from: 1440
+          to: 10080
+          step: 1440
 
     - id: TargetSwapFileSizeInGbs
       label: "Swap File Size"
