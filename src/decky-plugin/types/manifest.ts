@@ -1,3 +1,15 @@
+export interface UpdateManagerSection {
+  script: string;
+}
+
+export interface UpdateInfo {
+  currentVersion: string | null;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  loading: boolean;
+  error?: string;
+}
+
 export interface ConfigParameterSegment {
   /** Percentage of the slider width this segment occupies (all segments must sum to 100) */
   width: number;
@@ -55,6 +67,7 @@ export interface ExtensionManifest {
   config?: ConfigSection;
   configure?: { script: string };
   uninstall?: UninstallSection;
+  update_manager?: UpdateManagerSection;
 }
 
 export type ExtensionStatus = "active" | "pending" | "disabled";
@@ -65,6 +78,7 @@ export interface Extension {
   status: ExtensionStatus;
   raw_file: string;
   readme: string;
+  has_update_manager: boolean;
 }
 
 export interface ExtensionConfig {

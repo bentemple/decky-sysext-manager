@@ -7,13 +7,14 @@ import { QuickAccessPanel } from "./decky-plugin/components/QuickAccessPanel";
 import { SettingsView } from "./decky-plugin/components/SettingsView";
 
 function QuickAccessContent() {
-  const { extensions, loading, error } = useExtensions();
+  const { extensions, loading, error, updateManager } = useExtensions();
 
   return (
     <QuickAccessPanel
       extensions={extensions}
       loading={loading}
       error={error}
+      updateManager={updateManager}
     />
   );
 }

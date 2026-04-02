@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Update manager for steamos-extension-tailscale
+# Used by the Decky plugin to check for and apply updates.
+# Note: --get-latest-version caching is handled by the Python backend.
+#
+# Usage:
+#   update-manager --get-current-version   # prints installed version, or empty string
+#   update-manager --get-latest-version    # prints latest available version from upstream
+#   update-manager --update                # runs tailscale.sh installer
+set -eu -o pipefail
+
+STATE_DIR="/home/deck/.local/share/steamos-extension-tailscale"
+VERSION_FILE="$STATE_DIR/version"
+INSTALL_SCRIPT="/usr/share/steamos-extension-tailscale/tailscale.sh"
+TAILSCALE_BIN="/opt/tailscale/tailscaled"
+
+case "${1:-}" in
+    --get-current-version)
+        if [[ -f "$VERSION_FILE" ]]; then
+            cat "$VERSION_FILE"
+        elif [[ -x "$TAILSCALE_BIN" ]]; then
+            "$TAILSCALE_BIN" --version 2>/dev/null | head -1 | awk '{print $1}' || true
+        fi
+        ;;
+
+    --get-latest-version)
+        latest_tarball="$(curl -sf 'https://pkgs.tailscale.com/stable/?mode=json' | jq -r .Tarballs.amd64)"
+        echo "$latest_tarball" | cut -d_ -f2
+        ;;
+
+    --update)
+        exec "$INSTALL_SCRIPT"
+        ;;
+
+    *)
+        echo "Usage: $0 --get-current-version | --get-latest-version | --update" >&2
+        exit 1
+        ;;
+esac

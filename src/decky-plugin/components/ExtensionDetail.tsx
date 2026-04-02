@@ -1,7 +1,8 @@
 import { PanelSection, PanelSectionRow, ToggleField, Focusable, ButtonItem, showModal, ConfirmModal } from "@decky/ui";
-import { FaChevronLeft, FaTimes } from "react-icons/fa";
-import { Extension, ExtensionStatus, ConfigParameter, ConfigParameterSegment, ExtensionConfig } from "../types/manifest";
+import { FaChevronLeft, FaTimes, FaUpload } from "react-icons/fa";
+import { Extension, ExtensionStatus, ConfigParameter, ConfigParameterSegment, ExtensionConfig, UpdateInfo } from "../types/manifest";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { toaster } from "@decky/api";
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
@@ -233,6 +234,7 @@ interface ExtensionDetailProps {
   onToggle: (ext: Extension, enabled: boolean) => void;
   onLoadConfig: (extId: string) => Promise<ExtensionConfig>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
+  onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
 }
 
 export function ExtensionDetail({
@@ -242,18 +244,28 @@ export function ExtensionDetail({
   onToggle,
   onLoadConfig,
   onSaveConfig,
+  onUpdateManager,
 }: ExtensionDetailProps) {
   const { manifest, status, readme } = extension;
   const isLoader = manifest.id === "loader";
   const isEnabled = status === "active" || status === "pending";
   const canToggle = isLoader || loaderEnabled;
   const hasConfig = Boolean(manifest.config?.parameters?.length);
+  const hasUpdateManager = extension.has_update_manager;
 
   const [configValues, setConfigValues] = useState<Record<string, string | number | boolean>>({});
   const [savedValues, setSavedValues] = useState<Record<string, string | number | boolean>>({});
   const [configLoading, setConfigLoading] = useState(false);
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo>({
+    currentVersion: null,
+    latestVersion: null,
+    updateAvailable: false,
+    loading: true,
+  });
+  const [updating, setUpdating] = useState(false);
 
   const isDirty = hasConfig && JSON.stringify(configValues) !== JSON.stringify(savedValues);
 
@@ -290,6 +302,31 @@ export function ExtensionDetail({
     }
   }, [manifest.id, hasConfig]);
 
+  // Load update info on mount (if update-manager is present)
+  const loadUpdateInfo = useCallback(() => {
+    if (!hasUpdateManager) return;
+    setUpdateInfo((prev) => ({ ...prev, loading: true }));
+    Promise.all([
+      onUpdateManager(manifest.id, "--get-current-version"),
+      onUpdateManager(manifest.id, "--get-latest-version"),
+    ]).then(([cur, lat]) => {
+      const current = cur.output?.trim() || null;
+      const latest = lat.output?.trim() || null;
+      setUpdateInfo({
+        currentVersion: current,
+        latestVersion: latest,
+        updateAvailable: !!latest && !!current && current !== latest,
+        loading: false,
+      });
+    }).catch((e) => {
+      setUpdateInfo({ currentVersion: null, latestVersion: null, updateAvailable: false, loading: false, error: String(e) });
+    });
+  }, [manifest.id, hasUpdateManager, onUpdateManager]);
+
+  useEffect(() => {
+    loadUpdateInfo();
+  }, [loadUpdateInfo]);
+
   const handleFieldChange = useCallback((id: string, value: string | number | boolean) => {
     setConfigValues((prev) => ({ ...prev, [id]: value }));
   }, []);
@@ -311,6 +348,21 @@ export function ExtensionDetail({
       setConfigSaving(false);
     }
   }, [manifest.id, configValues, onSaveConfig]);
+
+  const handleUpdate = useCallback(async () => {
+    setUpdating(true);
+    try {
+      const result = await onUpdateManager(manifest.id, "--update");
+      if (result.success) {
+        toaster.toast({ title: `${manifest.name} Updated`, body: "Update complete." });
+        loadUpdateInfo();
+      } else {
+        toaster.toast({ title: "Update Failed", body: result.error || "Unknown error" });
+      }
+    } finally {
+      setUpdating(false);
+    }
+  }, [manifest.id, manifest.name, onUpdateManager, loadUpdateInfo]);
 
   const handleBack = useCallback(() => {
     if (isDirty) {
@@ -446,6 +498,47 @@ export function ExtensionDetail({
           </PanelSectionRow>
         )}
       </PanelSection>
+
+      {/* Update */}
+      {hasUpdateManager && (
+        <PanelSection title="Update">
+          {updateInfo.loading ? (
+            <PanelSectionRow>
+              <div style={{ color: "#8b929a", fontSize: 13 }}>Checking for updates...</div>
+            </PanelSectionRow>
+          ) : updateInfo.error ? (
+            <PanelSectionRow>
+              <div style={{ color: "#e74c3c", fontSize: 13 }}>{updateInfo.error}</div>
+            </PanelSectionRow>
+          ) : updateInfo.updateAvailable ? (
+            <>
+              <PanelSectionRow>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                  <FaUpload style={{ color: "#f39c12" }} />
+                  <span style={{ color: "#f39c12" }}>
+                    Update available: v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
+                  </span>
+                </div>
+              </PanelSectionRow>
+              <PanelSectionRow>
+                <ButtonItem
+                  layout="below"
+                  onClick={handleUpdate}
+                  disabled={updating}
+                >
+                  {updating ? "Updating..." : "Update Now"}
+                </ButtonItem>
+              </PanelSectionRow>
+            </>
+          ) : (
+            <PanelSectionRow>
+              <div style={{ color: "#8b929a", fontSize: 13 }}>
+                Up to date{updateInfo.currentVersion ? `: v${updateInfo.currentVersion}` : ""}
+              </div>
+            </PanelSectionRow>
+          )}
+        </PanelSection>
+      )}
 
       {/* Settings */}
       {hasConfig && (

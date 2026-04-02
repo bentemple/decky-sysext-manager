@@ -1,6 +1,8 @@
 import os
 import sys
 import subprocess
+import time
+import json
 
 # Add bundled dependencies to path
 PLUGIN_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -12,6 +14,8 @@ import decky
 # Paths
 EXTENSIONS_DIR = "/var/lib/extensions"
 BUNDLED_EXTENSIONS_DIR = os.path.join(PLUGIN_DIR, "dist", "extensions")
+UPDATE_CACHE_DIR = os.path.join(PLUGIN_DIR, "cache", "update-manager")
+UPDATE_CACHE_MAX_AGE = 86400  # 24 hours
 
 
 class Plugin:
@@ -97,6 +101,14 @@ class Plugin:
                     raw_filename = f"steamos-extension-{ext_id}.raw"
                     status = self._get_extension_status(ext_id)
 
+                    # Check if update-manager script exists
+                    ext_dir = os.path.join(PLUGIN_DIR, f"steamos-extension-{ext_id}")
+                    update_manager_script = manifest.get("update_manager", {}).get("script", "")
+                    has_update_manager = False
+                    if update_manager_script:
+                        script_path = os.path.join(ext_dir, update_manager_script.lstrip("./"))
+                        has_update_manager = os.path.isfile(script_path) and os.access(script_path, os.X_OK)
+
                     # Read README if available
                     readme_path = os.path.join(BUNDLED_EXTENSIONS_DIR, f"{ext_name}.readme")
                     readme = ""
@@ -113,6 +125,7 @@ class Plugin:
                         "status": status,
                         "raw_file": raw_filename,
                         "readme": readme,
+                        "has_update_manager": has_update_manager,
                     })
                 except Exception as e:
                     decky.logger.error(f"Error loading manifest {filename}: {e}")
@@ -307,8 +320,89 @@ class Plugin:
             decky.logger.error(f"Error configuring extension {ext_id}: {e}")
             return {"success": False, "error": str(e)}
 
+    async def run_update_manager(self, ext_id: str, flag: str) -> dict:
+        """Run the update-manager script for an extension with the given flag.
+
+        For --get-latest-version, results are cached for up to 24 hours so that
+        extensions don't need to implement their own caching logic.
+        """
+        allowed_flags = {"--get-current-version", "--get-latest-version", "--update"}
+        if flag not in allowed_flags:
+            return {"success": False, "error": f"Invalid flag: {flag}"}
+
+        manifest_path = os.path.join(BUNDLED_EXTENSIONS_DIR, f"steamos-extension-{ext_id}.yaml")
+        if not os.path.isfile(manifest_path):
+            return {"success": False, "error": "Manifest not found"}
+
+        try:
+            with open(manifest_path, "r") as f:
+                manifest = yaml.safe_load(f)
+
+            update_manager_section = manifest.get("update_manager")
+            if not update_manager_section:
+                return {"success": False, "error": "Extension has no update_manager configured"}
+
+            script_rel = update_manager_section.get("script", "")
+            ext_dir = os.path.join(PLUGIN_DIR, f"steamos-extension-{ext_id}")
+            script_path = os.path.join(ext_dir, script_rel.lstrip("./"))
+
+            if not os.path.isfile(script_path):
+                return {"success": False, "error": f"update-manager script not found: {script_path}"}
+
+            # For --get-latest-version, check cache before invoking the script
+            if flag == "--get-latest-version":
+                cache_file = os.path.join(UPDATE_CACHE_DIR, f"{ext_id}.json")
+                now = time.time()
+                if os.path.isfile(cache_file):
+                    try:
+                        with open(cache_file, "r") as f:
+                            cache = json.load(f)
+                        if now - cache.get("timestamp", 0) < UPDATE_CACHE_MAX_AGE:
+                            decky.logger.debug(f"Using cached latest version for {ext_id}: {cache['version']}")
+                            return {"success": True, "output": cache["version"]}
+                    except Exception as e:
+                        decky.logger.warning(f"Could not read version cache for {ext_id}: {e}")
+
+            # Timeouts vary by operation
+            timeout = 300 if flag == "--update" else (15 if flag == "--get-latest-version" else 5)
+
+            decky.logger.info(f"Running update-manager for {ext_id}: {script_path} {flag}")
+            result = subprocess.run(
+                [script_path, flag],
+                capture_output=True, text=True, timeout=timeout
+            )
+
+            output = result.stdout.strip()
+            if result.returncode != 0:
+                return {"success": False, "output": output, "error": result.stderr.strip()}
+
+            # Cache the result of --get-latest-version
+            if flag == "--get-latest-version" and output:
+                try:
+                    os.makedirs(UPDATE_CACHE_DIR, exist_ok=True)
+                    cache_file = os.path.join(UPDATE_CACHE_DIR, f"{ext_id}.json")
+                    with open(cache_file, "w") as f:
+                        json.dump({"timestamp": time.time(), "version": output}, f)
+                except Exception as e:
+                    decky.logger.warning(f"Could not write version cache for {ext_id}: {e}")
+
+            # Invalidate the latest-version cache after a successful update
+            if flag == "--update":
+                try:
+                    cache_file = os.path.join(UPDATE_CACHE_DIR, f"{ext_id}.json")
+                    if os.path.isfile(cache_file):
+                        os.remove(cache_file)
+                except Exception:
+                    pass
+
+            return {"success": True, "output": output}
+        except subprocess.TimeoutExpired:
+            return {"success": False, "output": "", "error": "Timed out"}
+        except Exception as e:
+            decky.logger.error(f"Error running update-manager for {ext_id}: {e}")
+            return {"success": False, "output": "", "error": str(e)}
+
     async def reboot(self) -> dict:
-        """Trigger a system reboot."""
         try:
             subprocess.run(["sudo", "systemctl", "reboot"], check=True)
             return {"success": True}

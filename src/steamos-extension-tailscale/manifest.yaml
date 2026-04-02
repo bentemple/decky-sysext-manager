@@ -7,3 +7,6 @@ status: release
 
 activation:
   mode: auto
+
+update_manager:
+  script: "./update-manager"

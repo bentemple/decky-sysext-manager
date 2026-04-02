@@ -174,6 +174,7 @@ function ExtensionListPage({
   onReboot,
   onLoadConfig,
   onSaveConfig,
+  onUpdateManager,
 }: {
   extensions: Extension[];
   loader: Extension | undefined;
@@ -183,6 +184,7 @@ function ExtensionListPage({
   onReboot: () => Promise<{ success: boolean; error?: string }>;
   onLoadConfig: (extId: string) => Promise<any>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
+  onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
 }) {
   const [selectedExt, setSelectedExt] = useState<Extension | null>(null);
   const [pendingReboot, setPendingReboot] = useState(false);
@@ -284,6 +286,7 @@ function ExtensionListPage({
         onToggle={handleToggle}
         onLoadConfig={onLoadConfig}
         onSaveConfig={onSaveConfig}
+        onUpdateManager={onUpdateManager}
       />
     );
   }
@@ -346,7 +349,7 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, enable, disable, triggerReboot, loadConfig, saveConfig } = useExtensions();
+  const { extensions, enable, disable, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
 
   const loader = extensions.find((e) => e.manifest.id === "loader");
 
@@ -375,6 +378,7 @@ export function SettingsView() {
               onReboot={triggerReboot}
               onLoadConfig={loadConfig}
               onSaveConfig={saveConfig}
+              onUpdateManager={updateManager}
             />
           ),
         },
@@ -391,6 +395,7 @@ export function SettingsView() {
               onReboot={triggerReboot}
               onLoadConfig={loadConfig}
               onSaveConfig={saveConfig}
+              onUpdateManager={updateManager}
             />
           ),
         },
