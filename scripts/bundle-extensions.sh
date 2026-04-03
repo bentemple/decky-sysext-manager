@@ -22,6 +22,15 @@ else
     echo "  WARNING: No requirements.txt found"
 fi
 
+echo "Copying backend modules..."
+if [[ -d "$ROOT_DIR/src/backend" ]]; then
+    rm -rf "$PY_MODULES_DIR/backend"
+    cp -r "$ROOT_DIR/src/backend" "$PY_MODULES_DIR/backend"
+    echo "  Backend modules copied to py_modules/"
+else
+    echo "  WARNING: No src/backend directory found"
+fi
+
 echo "Bundling extensions..."
 
 # Create dist directory

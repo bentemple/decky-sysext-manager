@@ -162,7 +162,6 @@ function AboutPage({ onUninstallAll }: { onUninstallAll: () => void }) {
           <ButtonItem
             layout="below"
             onClick={handleUninstallAll}
-            style={{ backgroundColor: "#c0392b" }}
           >
             Uninstall All Extensions
           </ButtonItem>

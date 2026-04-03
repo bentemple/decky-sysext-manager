@@ -72,7 +72,7 @@ echo ""
 
 if [[ $FAILED -eq 1 ]]; then
     echo "Validation failed! Some .raw files are out of sync with source."
-    echo "Run ./build.sh to rebuild and commit the updated assets/extensions/ files."
+    echo "Run ./build-extension-images.sh to rebuild and commit the updated assets/extensions/ files."
     exit 1
 else
     echo "All extensions validated successfully!"
