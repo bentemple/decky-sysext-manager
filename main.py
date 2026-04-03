@@ -194,6 +194,17 @@ class Plugin:
             # Copy the extension file
             subprocess.run(["cp", source, dest], check=True)
 
+            # If enabling the loader, ensure systemd-sysext is enabled
+            if ext_id == "loader":
+                try:
+                    subprocess.run(
+                        ["sudo", "systemctl", "enable", "--now", "systemd-sysext"],
+                        check=True, timeout=30
+                    )
+                    decky.logger.info("Enabled systemd-sysext service")
+                except Exception as e:
+                    decky.logger.warning(f"Failed to enable systemd-sysext: {e}")
+
             # Check activation mode
             activation_mode = self._get_activation_mode(ext_id)
             needs_reboot = True
@@ -257,6 +268,12 @@ class Plugin:
             decky.logger.error(f"Error updating extension {ext_id}: {e}")
             return {"success": False, "error": str(e)}
 
+    def _count_raw_files(self) -> int:
+        """Count .raw files in the extensions directory."""
+        if not os.path.isdir(EXTENSIONS_DIR):
+            return 0
+        return len([f for f in os.listdir(EXTENSIONS_DIR) if f.endswith(".raw")])
+
     async def disable_extension(self, ext_id: str, prompt_answers: dict = None) -> dict:
         """Disable an extension by removing its .raw file and running uninstall script."""
         raw_filename = f"steamos-extension-{ext_id}.raw"
@@ -267,11 +284,12 @@ class Plugin:
         uninstall_script = os.path.join(ext_dir, "uninstall")
 
         try:
-            # Run uninstall script if it exists and we have prompt answers
-            if os.path.isfile(uninstall_script) and prompt_answers:
+            # Run uninstall script if it exists (with or without prompt answers)
+            if os.path.isfile(uninstall_script):
                 args = [uninstall_script]
-                for key, value in prompt_answers.items():
-                    args.append(f"--{key}={'true' if value else 'false'}")
+                if prompt_answers:
+                    for key, value in prompt_answers.items():
+                        args.append(f"--{key}={'true' if value else 'false'}")
 
                 decky.logger.info(f"Running uninstall script: {' '.join(args)}")
                 result = subprocess.run(args, capture_output=True, text=True, timeout=300)
@@ -281,6 +299,17 @@ class Plugin:
             # Remove the extension file
             if os.path.isfile(raw_path):
                 os.remove(raw_path)
+
+            # If disabling the loader and no other extensions exist, disable systemd-sysext
+            if ext_id == "loader" and self._count_raw_files() == 0:
+                try:
+                    subprocess.run(
+                        ["sudo", "systemctl", "disable", "systemd-sysext"],
+                        check=True, timeout=30
+                    )
+                    decky.logger.info("Disabled systemd-sysext service (no extensions remaining)")
+                except Exception as e:
+                    decky.logger.warning(f"Failed to disable systemd-sysext: {e}")
 
             # Check activation mode
             activation_mode = self._get_activation_mode(ext_id)
@@ -468,4 +497,39 @@ class Plugin:
             return {"success": True}
         except Exception as e:
             decky.logger.error(f"Error triggering reboot: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def uninstall_all(self) -> dict:
+        """Uninstall all extensions and reboot."""
+        try:
+            # Get all extensions
+            extensions = await self.get_extensions()
+
+            # Separate loader from other extensions
+            loader = None
+            others = []
+            for ext in extensions:
+                if ext["manifest"]["id"] == "loader":
+                    loader = ext
+                elif ext["status"] != "disabled":
+                    others.append(ext)
+
+            # Disable all non-loader extensions first (run uninstall scripts)
+            for ext in others:
+                ext_id = ext["manifest"]["id"]
+                decky.logger.info(f"Uninstalling extension: {ext_id}")
+                await self.disable_extension(ext_id, {})
+
+            # Disable loader last
+            if loader and loader["status"] != "disabled":
+                decky.logger.info("Uninstalling loader extension")
+                await self.disable_extension("loader", {})
+
+            # Reboot
+            decky.logger.info("Rebooting system...")
+            subprocess.run(["sudo", "systemctl", "reboot"], check=True)
+
+            return {"success": True}
+        except Exception as e:
+            decky.logger.error(f"Error during uninstall_all: {e}")
             return {"success": False, "error": str(e)}

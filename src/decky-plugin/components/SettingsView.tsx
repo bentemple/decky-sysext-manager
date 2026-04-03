@@ -6,6 +6,7 @@ import {
   ButtonItem,
   Focusable,
   showModal,
+  ConfirmModal,
 } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { FaChevronRight, FaUpload } from "react-icons/fa";
@@ -106,7 +107,22 @@ function ExtensionRow({
 }
 
 // About page content
-function AboutPage() {
+function AboutPage({ onUninstallAll }: { onUninstallAll: () => void }) {
+  const handleUninstallAll = useCallback(() => {
+    showModal(
+      <ConfirmModal
+        strTitle="Uninstall All Extensions"
+        strDescription="This will uninstall all extensions and reboot your Steam Deck. Are you sure?"
+        strOKButtonText="Uninstall All & Reboot"
+        strCancelButtonText="Cancel"
+        onOK={() => {
+          onUninstallAll();
+        }}
+        onCancel={() => {}}
+      />
+    );
+  }, [onUninstallAll]);
+
   return (
     <>
       <PanelSection title="SteamOS Extensions">
@@ -138,6 +154,18 @@ function AboutPage() {
           <div style={{ color: "#3498db", fontSize: 13 }}>
             github.com/bentemple/steamos-extensions
           </div>
+        </PanelSectionRow>
+      </PanelSection>
+
+      <PanelSection title="Danger Zone">
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            onClick={handleUninstallAll}
+            style={{ backgroundColor: "#c0392b" }}
+          >
+            Uninstall All Extensions
+          </ButtonItem>
         </PanelSectionRow>
       </PanelSection>
     </>
@@ -405,7 +433,7 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
+  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager, uninstallAll } = useExtensions();
 
   const sharedProps = {
     extensions,
@@ -467,7 +495,7 @@ export function SettingsView() {
         {
           title: "About",
           hideTitle: true,
-          content: <AboutPage />,
+          content: <AboutPage onUninstallAll={uninstallAll} />,
         },
       ]}
     />

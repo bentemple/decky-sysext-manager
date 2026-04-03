@@ -10,6 +10,7 @@ const getConfig = callable<[ext_id: string], ExtensionConfig>("get_config");
 const configureExtension = callable<[ext_id: string, config: Record<string, string | number>], { success: boolean; error?: string }>("configure_extension");
 const runUpdateManager = callable<[ext_id: string, flag: string], { success: boolean; output: string; error?: string }>("run_update_manager");
 const reboot = callable<[], { success: boolean; error?: string }>("reboot");
+const uninstallAllExtensions = callable<[], { success: boolean; error?: string }>("uninstall_all");
 
 export function useExtensions() {
   const [extensions, setExtensions] = useState<Extension[]>([]);
@@ -73,6 +74,10 @@ export function useExtensions() {
     return await reboot();
   }, []);
 
+  const uninstallAll = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    return await uninstallAllExtensions();
+  }, []);
+
   return {
     extensions,
     loading,
@@ -85,5 +90,6 @@ export function useExtensions() {
     saveConfig,
     updateManager,
     triggerReboot,
+    uninstallAll,
   };
 }
