@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Uninstall steamos-extension-loader
+set -eu -o pipefail
+
+echo "Stopping and disabling steamos-extension-loader.service..."
+systemctl stop steamos-extension-loader.service 2>/dev/null || true
+systemctl disable steamos-extension-loader.service 2>/dev/null || true
+
+echo "Removing service file..."
+rm -f /etc/systemd/system/steamos-extension-loader.service
+
+echo "Removing loader script..."
+rm -f /etc/steamos-extension-loader
+
+echo "Removing atomic-update configuration..."
+rm -f /etc/atomic-update.conf.d/steamos-extension-loader.conf
+rmdir /etc/atomic-update.conf.d 2>/dev/null || true
+
+echo "Reloading systemd..."
+systemctl daemon-reload
+
+echo "Extension loader uninstalled."

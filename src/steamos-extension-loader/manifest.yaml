@@ -8,3 +8,6 @@ required: true
 
 activation:
   mode: reboot
+
+uninstall:
+  script: ./uninstall

@@ -444,7 +444,7 @@ export function SettingsView() {
             <ExtensionListPage
               {...sharedProps}
               key="available"
-              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status === "release"}
+              filterFn={(e) => e.manifest.release_status === "release"}
               showLoader={false}
               emptyMessage="All release extensions are already enabled."
             />
