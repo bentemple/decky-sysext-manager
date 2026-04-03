@@ -407,7 +407,7 @@ export function ExtensionDetail({
   }, [isDirty, handleApply, onBack]);
 
   return (
-    <>
+    <Focusable onCancel={handleBack} style={{ display: "contents" }}>
       {/* Sticky X button - hidden at top, slides in as header scrolls away */}
       <div
         style={{
@@ -642,6 +642,6 @@ export function ExtensionDetail({
           </PanelSectionRow>
         </PanelSection>
       )}
-    </>
+    </Focusable>
   );
 }

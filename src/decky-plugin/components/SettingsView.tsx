@@ -8,7 +8,7 @@ import {
   showModal,
 } from "@decky/ui";
 import { toaster } from "@decky/api";
-import { FaChevronRight } from "react-icons/fa";
+import { FaChevronRight, FaUpload } from "react-icons/fa";
 import { Extension, ExtensionStatus } from "../types/manifest";
 import { useExtensions } from "../hooks/useExtensions";
 import { ExtensionDetail } from "./ExtensionDetail";
@@ -47,12 +47,15 @@ function StatusBadge({ status }: { status: ExtensionStatus }) {
 function ExtensionRow({
   extension,
   onSelect,
+  showExperimentalTag,
 }: {
   extension: Extension;
   onSelect: (ext: Extension) => void;
+  showExperimentalTag?: boolean;
 }) {
   const { manifest, status } = extension;
   const isLoader = manifest.id === "loader";
+  const isExperimental = manifest.release_status !== "release" && manifest.release_status !== "disabled" && manifest.id !== "loader";
 
   return (
     <Focusable
@@ -64,6 +67,7 @@ function ExtensionRow({
         borderBottom: "1px solid rgba(255,255,255,0.1)",
       }}
       onActivate={() => onSelect(extension)}
+      onClick={() => onSelect(extension)}
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -72,6 +76,9 @@ function ExtensionRow({
           </span>
           {isLoader && (
             <span style={{ color: "#e74c3c", fontSize: 11 }}>Required</span>
+          )}
+          {showExperimentalTag && isExperimental && (
+            <span style={{ color: "#f39c12", fontSize: 11 }}>Experimental</span>
           )}
         </div>
         <div
@@ -88,6 +95,9 @@ function ExtensionRow({
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: 12 }}>
+        {extension.bundled_update_available && (
+          <FaUpload style={{ color: "#f39c12", fontSize: 12 }} />
+        )}
         <StatusBadge status={status} />
         <FaChevronRight style={{ color: "#8b929a", fontSize: 12 }} />
       </div>
@@ -164,35 +174,58 @@ function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-// Extension list page - shared between release and experimental tabs
+// Extension list page - shared between tabs
 function ExtensionListPage({
   extensions,
-  loader,
+  loading,
+  enable,
+  disable,
+  updateExt,
+  triggerReboot,
+  loadConfig,
+  saveConfig,
+  updateManager,
+  filterFn,
   showLoader,
-  onEnable,
-  onDisable,
-  onUpdateExt,
-  onReboot,
-  onLoadConfig,
-  onSaveConfig,
-  onUpdateManager,
+  showExperimentalTags,
+  emptyMessage,
 }: {
   extensions: Extension[];
-  loader: Extension | undefined;
+  loading: boolean;
+  enable: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  disable: (extId: string, promptAnswers?: Record<string, boolean>) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  updateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  triggerReboot: () => Promise<{ success: boolean; error?: string }>;
+  loadConfig: (extId: string) => Promise<import("../types/manifest").ExtensionConfig>;
+  saveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
+  updateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  filterFn: (e: Extension) => boolean;
   showLoader: boolean;
-  onEnable: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
-  onDisable: (extId: string, answers: Record<string, boolean>) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
-  onUpdateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
-  onReboot: () => Promise<{ success: boolean; error?: string }>;
-  onLoadConfig: (extId: string) => Promise<any>;
-  onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
-  onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  showExperimentalTags?: boolean;
+  emptyMessage?: string;
 }) {
+  const loader = extensions.find((e) => e.manifest.id === "loader");
+
   const [selectedExt, setSelectedExt] = useState<Extension | null>(null);
   const [pendingReboot, setPendingReboot] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
   const savedScrollTop = useRef<number>(0);
+
+  // Stable membership: snapshot grows when new matching extensions appear, never shrinks.
+  // IDs are added on first match; removed only when component unmounts (tab switch).
+  const snapshotIdsRef = useRef<Set<string>>(new Set());
+  const matchingIds = extensions.filter(filterFn).map((e) => e.manifest.id);
+  for (const id of matchingIds) {
+    snapshotIdsRef.current.add(id);
+  }
+
+  // Resolve snapshot IDs against live extensions for up-to-date status/badges
+  const byId = new Map(extensions.map((e) => [e.manifest.id, e]));
+  const stableExtensions = Array.from(snapshotIdsRef.current).flatMap((id) => {
+    const ext = byId.get(id);
+    return ext ? [ext] : [];
+  });
 
   // Discover the scroll container once we have a DOM element to walk up from
   useEffect(() => {
@@ -202,8 +235,11 @@ function ExtensionListPage({
   });
 
   const loaderEnabled = loader?.status === "active" || loader?.status === "pending";
-  const categories = groupExtensionsByCategory(extensions);
+  const categories = groupExtensionsByCategory(stableExtensions);
   const sortedCategories = sortCategories(Object.keys(categories));
+
+  // Keep selectedExt live
+  const liveSelectedExt = selectedExt ? (byId.get(selectedExt.manifest.id) ?? selectedExt) : null;
 
   const handleSelectExtension = useCallback((ext: Extension) => {
     savedScrollTop.current = scrollContainerRef.current?.scrollTop ?? 0;
@@ -227,9 +263,9 @@ function ExtensionListPage({
   }, []);
 
   const handleToggle = useCallback(
-    async (ext: Extension, enable: boolean) => {
-      if (enable) {
-        const result = await onEnable(ext.manifest.id);
+    async (ext: Extension, doEnable: boolean) => {
+      if (doEnable) {
+        const result = await enable(ext.manifest.id);
         if (result.success) {
           if (result.needs_reboot) {
             setPendingReboot(true);
@@ -248,7 +284,7 @@ function ExtensionListPage({
               extensionName={ext.manifest.name}
               prompts={ext.manifest.uninstall.prompts}
               onConfirm={async (answers) => {
-                const result = await onDisable(ext.manifest.id, answers);
+                const result = await disable(ext.manifest.id, answers);
                 if (result.success && result.needs_reboot) {
                   setPendingReboot(true);
                   toaster.toast({
@@ -261,7 +297,7 @@ function ExtensionListPage({
             />
           );
         } else {
-          const result = await onDisable(ext.manifest.id, {});
+          const result = await disable(ext.manifest.id, {});
           if (result.success && result.needs_reboot) {
             setPendingReboot(true);
             toaster.toast({
@@ -272,24 +308,24 @@ function ExtensionListPage({
         }
       }
     },
-    [onEnable, onDisable]
+    [enable, disable]
   );
 
   const handleReboot = useCallback(async () => {
-    await onReboot();
-  }, [onReboot]);
+    await triggerReboot();
+  }, [triggerReboot]);
 
-  if (selectedExt) {
+  if (liveSelectedExt) {
     return (
       <ExtensionDetail
-        extension={selectedExt}
+        extension={liveSelectedExt}
         loaderEnabled={loaderEnabled}
         onBack={handleBack}
         onToggle={handleToggle}
-        onLoadConfig={onLoadConfig}
-        onSaveConfig={onSaveConfig}
-        onUpdateManager={onUpdateManager}
-        onUpdateExt={onUpdateExt}
+        onLoadConfig={loadConfig}
+        onSaveConfig={saveConfig}
+        onUpdateManager={updateManager}
+        onUpdateExt={updateExt}
       />
     );
   }
@@ -312,7 +348,23 @@ function ExtensionListPage({
         </PanelSection>
       )}
 
-      {!loaderEnabled && (
+      {loading && (
+        <div style={{ display: "flex", justifyContent: "center", padding: "40px 0" }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              border: "3px solid rgba(255,255,255,0.1)",
+              borderTopColor: "#1a9fff",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+            }}
+          />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {!loading && !loaderEnabled && !showLoader && (
         <PanelSection>
           <PanelSectionRow>
             <div style={{ color: "#e74c3c", fontSize: 13 }}>
@@ -332,16 +384,17 @@ function ExtensionListPage({
               key={ext.manifest.id}
               extension={ext}
               onSelect={handleSelectExtension}
+              showExperimentalTag={showExperimentalTags}
             />
           ))}
         </PanelSection>
       ))}
 
-      {sortedCategories.length === 0 && !showLoader && (
+      {sortedCategories.length === 0 && !showLoader && !loading && (
         <PanelSection>
           <PanelSectionRow>
             <div style={{ color: "#8b929a", fontSize: 13 }}>
-              No extensions in this category.
+              {emptyMessage || "No extensions in this category."}
             </div>
           </PanelSectionRow>
         </PanelSection>
@@ -352,16 +405,19 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
+  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
 
-  const loader = extensions.find((e) => e.manifest.id === "loader");
-
-  const releaseExtensions = extensions.filter(
-    (e) => e.manifest.id !== "loader" && e.manifest.status === "release"
-  );
-  const experimentalExtensions = extensions.filter(
-    (e) => e.manifest.id !== "loader" && e.manifest.status !== "release"
-  );
+  const sharedProps = {
+    extensions,
+    loading,
+    enable,
+    disable,
+    updateExt,
+    triggerReboot,
+    loadConfig,
+    saveConfig,
+    updateManager,
+  };
 
   return (
     <SidebarNavigation
@@ -369,20 +425,28 @@ export function SettingsView() {
       showTitle={true}
       pages={[
         {
-          title: "Extensions",
+          title: "Enabled",
           hideTitle: true,
           content: (
             <ExtensionListPage
-              extensions={releaseExtensions}
-              loader={loader}
+              {...sharedProps}
+              key="enabled"
+              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status !== "disabled" && (e.status === "active" || e.status === "pending")}
               showLoader={true}
-              onEnable={enable}
-              onDisable={disable}
-              onUpdateExt={updateExt}
-              onReboot={triggerReboot}
-              onLoadConfig={loadConfig}
-              onSaveConfig={saveConfig}
-              onUpdateManager={updateManager}
+              emptyMessage="No extensions enabled."
+            />
+          ),
+        },
+        {
+          title: "Available",
+          hideTitle: true,
+          content: (
+            <ExtensionListPage
+              {...sharedProps}
+              key="available"
+              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status === "release"}
+              showLoader={false}
+              emptyMessage="All release extensions are already enabled."
             />
           ),
         },
@@ -391,16 +455,12 @@ export function SettingsView() {
           hideTitle: true,
           content: (
             <ExtensionListPage
-              extensions={experimentalExtensions}
-              loader={loader}
+              {...sharedProps}
+              key="experimental"
+              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status !== "release" && e.manifest.release_status !== "disabled"}
               showLoader={false}
-              onEnable={enable}
-              onDisable={disable}
-              onUpdateExt={updateExt}
-              onReboot={triggerReboot}
-              onLoadConfig={loadConfig}
-              onSaveConfig={saveConfig}
-              onUpdateManager={updateManager}
+              showExperimentalTags={true}
+              emptyMessage="No experimental extensions available."
             />
           ),
         },

@@ -3,7 +3,7 @@ id: "loader"
 description: "Core extension that persists other extensions between SteamOS updates (required)"
 version: "1.0.0"
 category: "system"
-status: release
+release_status: release
 required: true
 
 activation:

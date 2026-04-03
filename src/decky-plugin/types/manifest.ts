@@ -62,7 +62,7 @@ export interface ExtensionManifest {
   version: string;
   category: string;
   required?: boolean;
-  status?: "release" | "experimental" | "disabled";  // defaults to "experimental"
+  release_status?: "release" | "experimental" | "disabled";  // defaults to "experimental" when absent
   activation: ActivationSection;
   config?: ConfigSection;
   configure?: { script: string };

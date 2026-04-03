@@ -3,7 +3,7 @@ id: "hibernate-after-sleep"
 description: "Auto-hibernate after configurable suspend time to save battery"
 version: "1.0.0"
 category: "power"
-status: release
+release_status: release
 
 # Activation behavior
 activation:
