@@ -49,22 +49,28 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
   );
 
   // Check for updates for all enabled extensions that have an update-manager
+  // Only check extensions that haven't been checked yet to avoid unnecessary re-checks
   useEffect(() => {
     if (enabledWithUpdateManager.length === 0) return;
 
-    // Mark all as checking (only those not yet checked)
+    // Only check extensions that haven't been checked yet
+    const extensionsToCheck = enabledWithUpdateManager.filter(
+      (ext) => !updateStates[ext.manifest.id]
+    );
+
+    if (extensionsToCheck.length === 0) return;
+
+    // Mark all as checking
     setUpdateStates((prev) => {
       const next = { ...prev };
-      for (const ext of enabledWithUpdateManager) {
-        if (!next[ext.manifest.id]) {
-          next[ext.manifest.id] = { checking: true, available: false };
-        }
+      for (const ext of extensionsToCheck) {
+        next[ext.manifest.id] = { checking: true, available: false };
       }
       return next;
     });
 
     // Fetch current + latest version for each in parallel
-    for (const ext of enabledWithUpdateManager) {
+    for (const ext of extensionsToCheck) {
       Promise.all([
         updateManager(ext.manifest.id, "--get-current-version"),
         updateManager(ext.manifest.id, "--get-latest-version"),

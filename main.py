@@ -78,7 +78,3 @@ class Plugin:
     async def reboot(self) -> dict:
         """Trigger system reboot."""
         return await self.manager.reboot()
-
-    async def uninstall_all(self) -> dict:
-        """Uninstall all extensions and reboot."""
-        return await self.manager.uninstall_all()

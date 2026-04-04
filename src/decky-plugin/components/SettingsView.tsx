@@ -6,7 +6,6 @@ import {
   ButtonItem,
   Focusable,
   showModal,
-  ConfirmModal,
 } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { FaChevronRight, FaUpload } from "react-icons/fa";
@@ -14,6 +13,7 @@ import { Extension, ExtensionStatus } from "../types/manifest";
 import { useExtensions } from "../hooks/useExtensions";
 import { ExtensionDetail } from "./ExtensionDetail";
 import { UninstallDialog } from "./UninstallDialog";
+import { AboutPage } from "./AboutPage";
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
@@ -103,71 +103,6 @@ function ExtensionRow({
         <FaChevronRight style={{ color: "#8b929a", fontSize: 12 }} />
       </div>
     </Focusable>
-  );
-}
-
-// About page content
-function AboutPage({ onUninstallAll }: { onUninstallAll: () => void }) {
-  const handleUninstallAll = useCallback(() => {
-    showModal(
-      <ConfirmModal
-        strTitle="Uninstall All Extensions"
-        strDescription="This will uninstall all extensions and reboot your Steam Deck. Are you sure?"
-        strOKButtonText="Uninstall All & Reboot"
-        strCancelButtonText="Cancel"
-        onOK={() => {
-          onUninstallAll();
-        }}
-        onCancel={() => {}}
-      />
-    );
-  }, [onUninstallAll]);
-
-  return (
-    <>
-      <PanelSection title="SteamOS Extensions">
-        <PanelSectionRow>
-          <div style={{ color: "#bdc3c7", fontSize: 14 }}>
-            Manage SteamOS systemd-sysext extensions for power, performance, and utilities.
-          </div>
-        </PanelSectionRow>
-      </PanelSection>
-
-      <PanelSection title="Status Legend">
-        <PanelSectionRow>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div>
-              <span style={{ color: "#27ae60" }}>●</span> Active - Extension is loaded and running
-            </div>
-            <div>
-              <span style={{ color: "#f39c12" }}>●</span> Pending - Reboot required to activate
-            </div>
-            <div>
-              <span style={{ color: "#7f8c8d" }}>●</span> Disabled - Extension is not enabled
-            </div>
-          </div>
-        </PanelSectionRow>
-      </PanelSection>
-
-      <PanelSection title="Links">
-        <PanelSectionRow>
-          <div style={{ color: "#3498db", fontSize: 13 }}>
-            github.com/bentemple/steamos-extensions
-          </div>
-        </PanelSectionRow>
-      </PanelSection>
-
-      <PanelSection title="Danger Zone">
-        <PanelSectionRow>
-          <ButtonItem
-            layout="below"
-            onClick={handleUninstallAll}
-          >
-            Uninstall All Extensions
-          </ButtonItem>
-        </PanelSectionRow>
-      </PanelSection>
-    </>
   );
 }
 
@@ -436,7 +371,7 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager, uninstallAll } = useExtensions();
+  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
 
   const sharedProps = {
     extensions,
@@ -464,6 +399,7 @@ export function SettingsView() {
               key="enabled"
               filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status !== "disabled" && (e.status === "active" || e.status === "pending")}
               showLoader={true}
+              showExperimentalTags={true}
               emptyMessage="No extensions enabled."
             />
           ),
@@ -477,6 +413,7 @@ export function SettingsView() {
               key="available"
               filterFn={(e) => e.manifest.release_status === "release"}
               showLoader={true}
+              showExperimentalTags={true}
               emptyMessage="All release extensions are already enabled."
             />
           ),
@@ -498,7 +435,13 @@ export function SettingsView() {
         {
           title: "About",
           hideTitle: true,
-          content: <AboutPage onUninstallAll={uninstallAll} />,
+          content: (
+            <AboutPage
+              extensions={extensions}
+              disable={disable}
+              triggerReboot={triggerReboot}
+            />
+          ),
         },
       ]}
     />

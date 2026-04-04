@@ -498,38 +498,3 @@ class ExtensionManager:
         except Exception as e:
             self._log("error", f"Error triggering reboot: {e}")
             return {"success": False, "error": str(e)}
-
-    async def uninstall_all(self) -> Dict[str, Any]:
-        """Uninstall all extensions and reboot."""
-        try:
-            # Get all extensions
-            extensions = await self.get_extensions()
-
-            # Separate loader from other extensions
-            loader = None
-            others = []
-            for ext in extensions:
-                if ext["manifest"]["id"] == "loader":
-                    loader = ext
-                elif ext["status"] != "disabled":
-                    others.append(ext)
-
-            # Disable all non-loader extensions first (run uninstall scripts)
-            for ext in others:
-                ext_id = ext["manifest"]["id"]
-                self._log("info", f"Uninstalling extension: {ext_id}")
-                await self.disable_extension(ext_id, {})
-
-            # Disable loader last
-            if loader and loader["status"] != "disabled":
-                self._log("info", "Uninstalling loader extension")
-                await self.disable_extension("loader", {})
-
-            # Reboot
-            self._log("info", "Rebooting system...")
-            self.sys.reboot()
-
-            return {"success": True}
-        except Exception as e:
-            self._log("error", f"Error during uninstall_all: {e}")
-            return {"success": False, "error": str(e)}
