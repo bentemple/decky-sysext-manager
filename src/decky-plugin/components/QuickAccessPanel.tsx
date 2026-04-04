@@ -108,9 +108,9 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
   const loader = extensions.find((e) => e.manifest.id === "loader");
   const loaderActive = loader?.status === "active";
 
-  const enabledExtensions = extensions.filter(
-    (e) => e.manifest.id !== "loader" && (e.status === "active" || e.status === "pending")
-  );
+  const enabledExtensions = extensions
+    .filter((e) => e.manifest.id !== "loader" && (e.status === "active" || e.status === "pending"))
+    .sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
 
   const getLoaderStatusText = () => {
     if (!loader) return "Not Found";

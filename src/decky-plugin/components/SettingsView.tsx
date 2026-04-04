@@ -172,7 +172,7 @@ function AboutPage({ onUninstallAll }: { onUninstallAll: () => void }) {
 }
 
 // Category order for sorting
-const CATEGORY_ORDER = ["system", "network", "power", "performance", "utilities", "boot", "other"];
+const CATEGORY_ORDER = ["system", "power", "network", "utilities", "performance", "boot", "other"];
 
 function groupExtensionsByCategory(extensions: Extension[]): Record<string, Extension[]> {
   const categories: Record<string, Extension[]> = {};
@@ -181,6 +181,10 @@ function groupExtensionsByCategory(extensions: Extension[]): Record<string, Exte
     const cat = ext.manifest.category || "other";
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push(ext);
+  }
+  // Sort extensions alphabetically within each category
+  for (const cat in categories) {
+    categories[cat].sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
   }
   return categories;
 }
@@ -472,7 +476,7 @@ export function SettingsView() {
               {...sharedProps}
               key="available"
               filterFn={(e) => e.manifest.release_status === "release"}
-              showLoader={false}
+              showLoader={true}
               emptyMessage="All release extensions are already enabled."
             />
           ),
