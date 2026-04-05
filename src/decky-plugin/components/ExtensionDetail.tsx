@@ -251,7 +251,8 @@ export function ExtensionDetail({
   const { manifest, status, readme } = extension;
   const isLoader = manifest.id === "loader";
   const isEnabled = status === "active" || status === "pending";
-  const canToggle = isLoader || loaderEnabled;
+  // Allow disabling enabled extensions even when loader is disabled
+  const canToggle = isLoader || loaderEnabled || isEnabled;
   const hasConfig = Boolean(manifest.config?.parameters?.length);
   const hasUpdateManager = extension.has_update_manager;
 
