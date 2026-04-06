@@ -74,6 +74,11 @@ for ext_dir in "$ROOT_DIR"/src/steamos-extension-*/; do
         cp "$ext_dir/uninstall" "$DIST_DIR/$ext_name.uninstall"
     fi
 
+    # Copy update-manager script
+    if [[ -f "$ext_dir/update-manager" ]]; then
+        cp "$ext_dir/update-manager" "$DIST_DIR/$ext_name.update-manager"
+    fi
+
     # Copy README
     if [[ -f "$ext_dir/README.md" ]]; then
         cp "$ext_dir/README.md" "$DIST_DIR/$ext_name.readme"

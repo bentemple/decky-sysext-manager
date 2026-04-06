@@ -97,6 +97,10 @@ class SystemOps(Protocol):
         """Disable a systemd service."""
         ...
 
+    def systemctl_is_active(self, service: str) -> bool:
+        """Check if a systemd service is active."""
+        ...
+
     def reboot(self) -> CommandResult:
         """Trigger system reboot."""
         ...
@@ -104,6 +108,17 @@ class SystemOps(Protocol):
 
 class RealSystemOps:
     """Production implementation using actual system calls."""
+
+    def __init__(self, logger=None):
+        """Initialize with optional logger for debugging."""
+        self.logger = logger
+
+    def _log(self, level: str, message: str) -> None:
+        """Log a message if logger is available."""
+        if self.logger:
+            log_fn = getattr(self.logger, level, None)
+            if log_fn:
+                log_fn(message)
 
     # File operations
 
@@ -152,19 +167,38 @@ class RealSystemOps:
 
     def run_command(self, args: List[str], timeout: int = 30) -> CommandResult:
         """Run a shell command and return the result."""
+        cmd_str = " ".join(args)
+        self._log("info", f"Running command: {cmd_str}")
+
         try:
+            # Use clean environment to avoid sysext library conflicts
+            # (e.g., readline symbol errors when bash loads wrong libreadline)
+            env = os.environ.copy()
+            env.pop("LD_LIBRARY_PATH", None)
+            env.pop("LD_PRELOAD", None)
+
             result = subprocess.run(
                 args,
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                env=env
             )
+
+            if result.stdout.strip():
+                self._log("info", f"Command stdout: {result.stdout.strip()}")
+            if result.stderr.strip():
+                self._log("warning", f"Command stderr: {result.stderr.strip()}")
+            if result.returncode != 0:
+                self._log("warning", f"Command exited with code {result.returncode}")
+
             return CommandResult(
                 returncode=result.returncode,
                 stdout=result.stdout,
                 stderr=result.stderr
             )
         except subprocess.TimeoutExpired:
+            self._log("error", f"Command timed out after {timeout}s: {cmd_str}")
             return CommandResult(
                 returncode=-1,
                 stdout="",
@@ -194,6 +228,13 @@ class RealSystemOps:
             ["sudo", "systemctl", "disable", service],
             timeout=30
         )
+
+    def systemctl_is_active(self, service: str) -> bool:
+        result = self.run_command(
+            ["systemctl", "is-active", "--quiet", service],
+            timeout=10
+        )
+        return result.success
 
     def reboot(self) -> CommandResult:
         return self.run_command(

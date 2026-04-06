@@ -1,12 +1,19 @@
 import { useCallback } from "react";
 import {
-  PanelSection,
-  PanelSectionRow,
-  ButtonItem,
+  DialogBody,
+  DialogControlsSection,
+  Field,
   Focusable,
+  ButtonItem,
   showModal,
   ConfirmModal,
 } from "@decky/ui";
+
+declare const SteamClient: {
+  URL: {
+    ExecuteSteamURL: (url: string) => void;
+  };
+};
 import { Extension } from "../types/manifest";
 import { UninstallDialog } from "./UninstallDialog";
 
@@ -25,17 +32,14 @@ export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps
         strOKButtonText="Uninstall All & Reboot"
         strCancelButtonText="Cancel"
         onOK={async () => {
-          // Separate loader from other extensions
           const loader = extensions.find((e) => e.manifest.id === "loader");
           const others = extensions.filter(
             (e) => e.manifest.id !== "loader" && e.status !== "disabled"
           );
 
-          // Helper to uninstall one extension (with prompts if needed)
           const uninstallOne = async (ext: Extension): Promise<void> => {
             return new Promise((resolve) => {
               if (ext.manifest.uninstall?.prompts?.length) {
-                // Show prompts for this extension
                 showModal(
                   <UninstallDialog
                     extensionName={ext.manifest.name}
@@ -44,30 +48,23 @@ export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps
                       await disable(ext.manifest.id, answers);
                       resolve();
                     }}
-                    onCancel={() => {
-                      // User cancelled - skip this extension
-                      resolve();
-                    }}
+                    onCancel={() => resolve()}
                   />
                 );
               } else {
-                // No prompts - just disable
                 disable(ext.manifest.id, {}).then(() => resolve());
               }
             });
           };
 
-          // Uninstall all non-loader extensions first (sequentially to show prompts)
           for (const ext of others) {
             await uninstallOne(ext);
           }
 
-          // Uninstall loader last (if enabled)
           if (loader && loader.status !== "disabled") {
             await uninstallOne(loader);
           }
 
-          // Reboot
           await triggerReboot();
         }}
         onCancel={() => {}}
@@ -76,100 +73,99 @@ export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps
   }, [extensions, disable, triggerReboot]);
 
   return (
-    <>
-      <PanelSection title="About SteamOS Extensions">
-        <PanelSectionRow>
-          <Focusable style={{ outline: "none" }}>
-            <div style={{ color: "#bdc3c7", fontSize: 14, lineHeight: 1.5 }}>
-              SteamOS Extensions are system modifications that persist across SteamOS updates using systemd-sysext.
-              They enable power management tweaks, VPN access, performance tuning, and other utilities without
-              modifying the read-only root filesystem.
-            </div>
-          </Focusable>
-        </PanelSectionRow>
-      </PanelSection>
+    <DialogBody>
+      <DialogControlsSection>
+        {/* About Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+        >
+          <span style={{ fontSize: "1.2em" }}>About SteamOS Sysext Extensions</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />
+        </Focusable>
+        <Field
+          focusable={true}
+          description="SteamOS Sysext Extensions are system modifications that persist across SteamOS updates using systemd-sysext. They enable power management tweaks, VPN access, performance tuning, and other utilities without directly modifying the read-only root filesystem."
+        />
 
-      <PanelSection title="How systemd-sysext Works">
-        <PanelSectionRow>
-          <Focusable style={{ outline: "none" }}>
-            <div style={{ color: "#bdc3c7", fontSize: 13, lineHeight: 1.5 }}>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>Immutable OS Challenge:</strong> SteamOS uses a read-only
-                root filesystem that gets replaced entirely during updates. Traditional modifications would be lost.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>OverlayFS Solution:</strong> systemd-sysext uses overlay
-                filesystems to layer extension content on top of the base system without modifying it. Extensions
-                appear as if they're part of /usr, but the base OS remains untouched.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>How Merging Works:</strong> When systemd-sysext activates
-                extensions, it creates an overlay mount where the lower layer is the read-only /usr, and upper
-                layers are the extension .raw images. Files from extensions shadow or add to the base system.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>Extension Images:</strong> Each .raw file is a squashfs
-                image containing a directory structure that mirrors /usr (like /usr/bin/, /usr/lib/, /usr/share/).
-                These merge seamlessly into the system hierarchy.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>Update Survival:</strong> Extensions live in /var/lib/extensions/,
-                which is on the writable home partition. After a SteamOS update replaces the root filesystem, the
-                extensions are still there and re-merge with the new base system.
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <strong style={{ color: "#ecf0f1" }}>Activation Modes:</strong> Extensions can activate on boot
-                (merged before system starts), automatically via systemd units (on-demand), or via hot-reload
-                (systemd-sysext refresh without reboot).
-              </div>
-              <div>
-                <strong style={{ color: "#ecf0f1" }}>Extension Loader:</strong> This special extension runs after
-                SteamOS updates to reinstall other extensions from their bundled sources, ensuring your customizations
-                persist even when the base system is replaced.
-              </div>
-            </div>
-          </Focusable>
-        </PanelSectionRow>
-      </PanelSection>
+        {/* How systemd-sysext Works Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.2em" }}>How systemd-sysext Works</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />
+        </Focusable>
+        <Field
+          focusable={true}
+          label="SteamOS: An Immutable OS"
+          description="SteamOS uses a read-only root filesystem that gets replaced entirely during updates. This helps to reduce update size, and ensures that any SteamOS version is running a consistent environment. However, because of this, traditional modifications to the system's /usr or /etc directories can be lost with each update."
+        />
+        <Field
+          focusable={true}
+          label="systemd-sysext: OverlayFS"
+          description="Systemd-sysext provides a method for layering extension content on top of the base system without modifying it. It does this by mounting a squashfs filesystem image on-top of the existing OS's filesystem. Files from extensions shadow or add to the base system in /usr (like /usr/bin/, /usr/lib/, /usr/share/)."
+        />
+        <Field
+          focusable={true}
+          label="Update Survival"
+          description="Extensions live in /var/lib/extensions/ (which is on the writable home partition) and re-merge with the system after SteamOS updates. The loader extension uses an atomic-update.conf file to mark it and other config files for persistence across updates, and then the loader in-turn re-enables systemd-sysext and the installed extensions."
+        />
 
-      <PanelSection title="Status Legend">
-        <PanelSectionRow>
-          <Focusable style={{ outline: "none" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div>
-                <span style={{ color: "#27ae60" }}>●</span> Active - Extension is loaded and running
-              </div>
-              <div>
-                <span style={{ color: "#f39c12" }}>●</span> Pending - Reboot required to activate
-              </div>
-              <div>
-                <span style={{ color: "#7f8c8d" }}>●</span> Disabled - Extension is not enabled
-              </div>
+        {/* Status Legend Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.2em" }}>Status Legend</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />
+        </Focusable>
+        <Field
+          focusable={true}
+          description={
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div><span style={{ color: "#27ae60" }}>●</span> Active - Extension is loaded and running</div>
+              <div><span style={{ color: "#f39c12" }}>●</span> Pending - Reboot required to activate</div>
+              <div><span style={{ color: "#e67e22" }}>●</span> Unloaded - systemd-sysext not running</div>
+              <div><span style={{ color: "#7f8c8d" }}>●</span> Disabled - Extension is not enabled</div>
             </div>
-          </Focusable>
-        </PanelSectionRow>
-      </PanelSection>
+          }
+        />
 
-      <PanelSection title="Links">
-        <PanelSectionRow>
-          <Focusable style={{ outline: "none" }}>
-            <div style={{ color: "#3498db", fontSize: 13 }}>
-              github.com/bentemple/steamos-extensions
-            </div>
-          </Focusable>
-        </PanelSectionRow>
-      </PanelSection>
+        {/* Links Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.2em" }}>Links</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />
+        </Focusable>
+        <Field
+          focusable={true}
+          label="GitHub"
+          description="github.com/bentemple/decky-sysext-manager"
+          onClick={() => SteamClient.URL.ExecuteSteamURL("steam://openurl/https://github.com/bentemple/decky-sysext-manager")}
+        />
 
-      <PanelSection title="Other">
-        <PanelSectionRow>
-          <ButtonItem
-            layout="below"
-            onClick={handleUninstallAll}
-          >
-            Uninstall All Extensions
-          </ButtonItem>
-        </PanelSectionRow>
-      </PanelSection>
-    </>
+        {/* Manage Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.2em" }}>Manage</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />
+        </Focusable>
+        <ButtonItem
+          layout="below"
+          onClick={handleUninstallAll}
+        >
+          Uninstall All Extensions
+        </ButtonItem>
+      </DialogControlsSection>
+    </DialogBody>
   );
 }

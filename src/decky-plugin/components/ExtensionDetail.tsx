@@ -1,19 +1,21 @@
-import { PanelSection, PanelSectionRow, ToggleField, Focusable, ButtonItem, showModal, ConfirmModal } from "@decky/ui";
+import { DialogBody, DialogControlsSection, Field, ToggleField, Focusable, ButtonItem, showModal, ConfirmModal } from "@decky/ui";
 import { FaChevronLeft, FaTimes, FaUpload } from "react-icons/fa";
 import { Extension, ExtensionStatus, ConfigParameter, ConfigParameterSegment, ExtensionConfig, UpdateInfo } from "../types/manifest";
-import { useEffect, useState, useCallback, useRef } from "react";
-import { toaster } from "@decky/api";
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
+import { showToast } from "../utils/toast";
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
   const colors: Record<ExtensionStatus, string> = {
     active: "#2ecc71",
     pending: "#f1c40f",
+    unloaded: "#e67e22",
     disabled: "#95a5a6",
   };
   const labels: Record<ExtensionStatus, string> = {
     active: "Active",
     pending: "Pending",
+    unloaded: "Unloaded",
     disabled: "Disabled",
   };
 
@@ -90,14 +92,12 @@ function ConfigField({
 
   if (param.type === "boolean") {
     return (
-      <PanelSectionRow>
-        <ToggleField
-          label={param.label}
-          description={param.description}
-          checked={Boolean(displayValue)}
-          onChange={(v) => onChange(param.id, v)}
-        />
-      </PanelSectionRow>
+      <ToggleField
+        label={param.label}
+        description={param.description}
+        checked={Boolean(displayValue)}
+        onChange={(v) => onChange(param.id, v)}
+      />
     );
   }
 
@@ -112,45 +112,48 @@ function ConfigField({
         : `${numVal}${unit}`;
 
       return (
-        <PanelSectionRow>
-          <div style={{ width: "100%" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 13 }}>{param.label}</span>
-              <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
-                {displayLabel}
-              </span>
-            </div>
-            {param.description && (
-              <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
-                {param.description}
+        <Field
+          focusable={true}
+          label={param.label}
+          description={
+            <div style={{ width: "100%" }}>
+              {param.description && (
+                <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
+                  {param.description}
+                </div>
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
+                  {displayLabel}
+                </span>
               </div>
-            )}
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={0.01}
-              value={sliderVal}
-              onChange={(e) => {
-                const real = sliderToReal(Number(e.target.value), param.segments!);
-                onChange(param.id, real);
-              }}
-              style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-              <span style={{ color: "#8b929a", fontSize: 10 }}>
-                {param.type === "duration" && param.unit === "min"
-                  ? formatMinutes(param.segments[0].from)
-                  : `${param.segments[0].from}${unit}`}
-              </span>
-              <span style={{ color: "#8b929a", fontSize: 10 }}>
-                {param.type === "duration" && param.unit === "min"
-                  ? formatMinutes(param.segments[param.segments.length - 1].to)
-                  : `${param.segments[param.segments.length - 1].to}${unit}`}
-              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={0.01}
+                value={sliderVal}
+                onChange={(e) => {
+                  const real = sliderToReal(Number(e.target.value), param.segments!);
+                  onChange(param.id, real);
+                }}
+                style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+                <span style={{ color: "#8b929a", fontSize: 10 }}>
+                  {param.type === "duration" && param.unit === "min"
+                    ? formatMinutes(param.segments[0].from)
+                    : `${param.segments[0].from}${unit}`}
+                </span>
+                <span style={{ color: "#8b929a", fontSize: 10 }}>
+                  {param.type === "duration" && param.unit === "min"
+                    ? formatMinutes(param.segments[param.segments.length - 1].to)
+                    : `${param.segments[param.segments.length - 1].to}${unit}`}
+                </span>
+              </div>
             </div>
-          </div>
-        </PanelSectionRow>
+          }
+        />
       );
     }
 
@@ -159,68 +162,74 @@ function ConfigField({
     const max = param.max ?? 9999;
     const step = param.step || 1;
     return (
-      <PanelSectionRow>
-        <div style={{ width: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: 13 }}>{param.label}</span>
-            <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
-              {numVal}{unit}
-            </span>
-          </div>
-          {param.description && (
-            <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
-              {param.description}
+      <Field
+        focusable={true}
+        label={param.label}
+        description={
+          <div style={{ width: "100%" }}>
+            {param.description && (
+              <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
+                {param.description}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
+                {numVal}{unit}
+              </span>
             </div>
-          )}
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={numVal}
-            onChange={(e) => onChange(param.id, Number(e.target.value))}
-            style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
-          />
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-            <span style={{ color: "#8b929a", fontSize: 10 }}>{min}{unit}</span>
-            <span style={{ color: "#8b929a", fontSize: 10 }}>{max}{unit}</span>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              step={step}
+              value={numVal}
+              onChange={(e) => onChange(param.id, Number(e.target.value))}
+              style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
+            />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+              <span style={{ color: "#8b929a", fontSize: 10 }}>{min}{unit}</span>
+              <span style={{ color: "#8b929a", fontSize: 10 }}>{max}{unit}</span>
+            </div>
           </div>
-        </div>
-      </PanelSectionRow>
+        }
+      />
     );
   }
 
   if (param.type === "select" && param.options) {
     return (
-      <PanelSectionRow>
-        <div style={{ width: "100%" }}>
-          <div style={{ fontSize: 13, marginBottom: 4 }}>{param.label}</div>
-          {param.description && (
-            <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 6 }}>
-              {param.description}
+      <Field
+        focusable={true}
+        label={param.label}
+        description={
+          <div style={{ width: "100%" }}>
+            {param.description && (
+              <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 6 }}>
+                {param.description}
+              </div>
+            )}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {param.options.map((opt) => (
+                <Focusable
+                  key={opt.value}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: 4,
+                    fontSize: 12,
+                    background: String(displayValue) === opt.value
+                      ? "#1a9fff"
+                      : "rgba(255,255,255,0.1)",
+                    cursor: "pointer",
+                  }}
+                  onActivate={() => onChange(param.id, opt.value)}
+                >
+                  {opt.label}
+                </Focusable>
+              ))}
             </div>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {param.options.map((opt) => (
-              <Focusable
-                key={opt.value}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 4,
-                  fontSize: 12,
-                  background: String(displayValue) === opt.value
-                    ? "#1a9fff"
-                    : "rgba(255,255,255,0.1)",
-                  cursor: "pointer",
-                }}
-                onActivate={() => onChange(param.id, opt.value)}
-              >
-                {opt.label}
-              </Focusable>
-            ))}
           </div>
-        </div>
-      </PanelSectionRow>
+        }
+      />
     );
   }
 
@@ -231,15 +240,18 @@ interface ExtensionDetailProps {
   extension: Extension;
   loaderEnabled: boolean;
   onBack: () => void;
-  onToggle: (ext: Extension, enabled: boolean) => void;
+  onToggle: (ext: Extension, enabled: boolean) => Promise<void>;
   onLoadConfig: (extId: string) => Promise<ExtensionConfig>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
   onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
   onUpdateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  onEnableSysext: () => Promise<{ success: boolean; error?: string }>;
+  onUpdateComplete?: (extId: string) => void;
+  onRefresh: () => Promise<Extension | undefined>;
 }
 
 export function ExtensionDetail({
-  extension,
+  extension: initialExtension,
   loaderEnabled,
   onBack,
   onToggle,
@@ -247,14 +259,27 @@ export function ExtensionDetail({
   onSaveConfig,
   onUpdateManager,
   onUpdateExt,
+  onEnableSysext,
+  onUpdateComplete,
+  onRefresh,
 }: ExtensionDetailProps) {
+  // Local state for extension - updates after actions
+  const [extension, setExtension] = useState(initialExtension);
   const { manifest, status, readme } = extension;
   const isLoader = manifest.id === "loader";
-  const isEnabled = status === "active" || status === "pending";
-  // Allow disabling enabled extensions even when loader is disabled
+  const isEnabled = status === "active" || status === "pending" || status === "unloaded";
+  // Allow toggling if: it's the loader, OR loader is enabled, OR extension is already enabled (can always disable)
   const canToggle = isLoader || loaderEnabled || isEnabled;
   const hasConfig = Boolean(manifest.config?.parameters?.length);
   const hasUpdateManager = extension.has_update_manager;
+
+  // Refresh local extension state
+  const refreshExtension = useCallback(async () => {
+    const updated = await onRefresh();
+    if (updated) {
+      setExtension(updated);
+    }
+  }, [onRefresh]);
 
   const [configValues, setConfigValues] = useState<Record<string, string | number | boolean>>({});
   const [savedValues, setSavedValues] = useState<Record<string, string | number | boolean>>({});
@@ -273,19 +298,13 @@ export function ExtensionDetail({
 
   const isDirty = hasConfig && JSON.stringify(configValues) !== JSON.stringify(savedValues);
 
-  // Track whether the header row has scrolled out of view
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [headerVisible, setHeaderVisible] = useState(true);
+  const statusRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setHeaderVisible(entry.isIntersecting),
-      { threshold: 0 }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+  // Auto-focus status field on mount so B button works immediately
+  useLayoutEffect(() => {
+    requestAnimationFrame(() => {
+      statusRef.current?.focus();
+    });
   }, []);
 
   // Load config on mount
@@ -358,32 +377,34 @@ export function ExtensionDetail({
     try {
       const result = await onUpdateManager(manifest.id, "--update");
       if (result.success) {
-        toaster.toast({ title: `${manifest.name} Updated`, body: "Update complete." });
+        showToast({ title: `${manifest.name} Updated`, body: "Update complete." });
         loadUpdateInfo();
+        onUpdateComplete?.(manifest.id);
       } else {
-        toaster.toast({ title: "Update Failed", body: result.error || "Unknown error" });
+        showToast({ title: "Update Failed", body: result.error || "Unknown error" });
       }
     } finally {
       setUpdating(false);
     }
-  }, [manifest.id, manifest.name, onUpdateManager, loadUpdateInfo]);
+  }, [manifest.id, manifest.name, onUpdateManager, loadUpdateInfo, onUpdateComplete]);
 
   const handleUpdateExt = useCallback(async () => {
     setUpdatingExt(true);
     try {
       const result = await onUpdateExt(manifest.id);
       if (result.success) {
-        toaster.toast({
+        showToast({
           title: `${manifest.name} Updated`,
           body: result.needs_reboot ? "Extension updated. Reboot required." : "Extension updated.",
         });
+        onUpdateComplete?.(manifest.id);
       } else {
-        toaster.toast({ title: "Update Failed", body: result.error || "Unknown error" });
+        showToast({ title: "Update Failed", body: result.error || "Unknown error" });
       }
     } finally {
       setUpdatingExt(false);
     }
-  }, [manifest.id, manifest.name, onUpdateExt]);
+  }, [manifest.id, manifest.name, onUpdateExt, onUpdateComplete]);
 
   const handleBack = useCallback(() => {
     if (isDirty) {
@@ -407,228 +428,298 @@ export function ExtensionDetail({
     }
   }, [isDirty, handleApply, onBack]);
 
+  const handleEnableSysext = useCallback(async () => {
+    const result = await onEnableSysext();
+    if (result.success) {
+      showToast({ title: "Sysext Service Enabled", body: "Extensions are now mounted." });
+      await refreshExtension();
+    } else {
+      showToast({ title: "Failed to Enable", body: result.error || "Unknown error" });
+    }
+  }, [onEnableSysext, refreshExtension]);
+
+  // Wrap toggle to refresh extension state after completion
+  const handleToggle = useCallback(async (enabled: boolean) => {
+    await onToggle(extension, enabled);
+    await refreshExtension();
+  }, [extension, onToggle, refreshExtension]);
+
   return (
-    <Focusable onCancel={handleBack} style={{ display: "contents" }}>
-      {/* Sticky X button - hidden at top, slides in as header scrolls away */}
-      <div
-        style={{
-          position: "sticky",
-          top: -14,
-          zIndex: 10,
-          display: "flex",
-          justifyContent: "flex-end",
-          padding: "0 16px",
-          pointerEvents: "none",
-          height: 0,
-          overflow: "visible",
-        }}
-      >
-        <Focusable
+    <DialogBody>
+      <DialogControlsSection>
+        {/* Header: Back button + Title + Pinned X button */}
+        <div
           style={{
-            pointerEvents: headerVisible ? "none" : "auto",
-            width: 28,
-            height: 28,
-            borderRadius: "50%",
-            background: "rgba(40,42,48,0.9)",
-            border: "1px solid rgba(255,255,255,0.15)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            opacity: headerVisible ? 0 : 1,
-            transform: headerVisible ? "translateY(-14px)" : "translateY(0)",
-            transition: "opacity 0.15s ease, transform 0.15s ease",
+            padding: "8px 16px 12px 16px",
+            gap: 12,
+            position: "relative",
           }}
-          onActivate={handleBack}
         >
-          <FaTimes style={{ fontSize: 12, color: "#ccc" }} />
-        </Focusable>
-      </div>
+          {/* Pinned X button - absolute positioned */}
+          <Focusable
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 16,
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              background: "rgba(40,42,48,0.9)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 10,
+            }}
+            onActivate={handleBack}
+            onCancel={handleBack}
+          >
+            <FaTimes style={{ fontSize: 12, color: "#ccc" }} />
+          </Focusable>
+          <Focusable
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 4,
+              background: "rgba(255,255,255,0.1)",
+              cursor: "pointer",
+              fontSize: 13,
+              flexShrink: 0,
+            }}
+            onActivate={handleBack}
+            onCancel={handleBack}
+          >
+            <FaChevronLeft style={{ fontSize: 10 }} />
+            <span>Back</span>
+          </Focusable>
 
-      {/* Header: Back button + Title (scrolls normally) */}
-      <div
-        ref={headerRef}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "12px 16px",
-          gap: 12,
-        }}
-      >
-        <Focusable
+          <span style={{ fontSize: 18, fontWeight: "bold", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {manifest.name}
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 10px",
-            borderRadius: 4,
+            height: 1,
             background: "rgba(255,255,255,0.1)",
-            cursor: "pointer",
-            fontSize: 13,
-            flexShrink: 0,
+            margin: "0 16px 8px 16px",
           }}
-          onActivate={handleBack}
+        />
+
+        {/* Status and Toggle - auto-focused on mount for B button */}
+        <Focusable
+          ref={statusRef}
+          onCancel={handleBack}
+          // @ts-ignore
+          focusableIfNoChildren={true}
         >
-          <FaChevronLeft style={{ fontSize: 10 }} />
-          <span>Back</span>
-        </Focusable>
-
-        <span style={{ fontSize: 18, fontWeight: "bold", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {manifest.name}
-        </span>
-      </div>
-
-      {/* Divider */}
-      <div
-        style={{
-          height: 1,
-          background: "rgba(255,255,255,0.1)",
-          margin: "0 16px 8px 16px",
-        }}
-      />
-
-      {/* Status and Toggle */}
-      <PanelSection>
-        <PanelSectionRow>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "8px 0" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span>Status:</span>
               <StatusBadge status={status} />
             </div>
             <ToggleField
               checked={isEnabled}
-              onChange={(v) => onToggle(extension, v)}
+              onChange={handleToggle}
               disabled={!canToggle}
             />
           </div>
-        </PanelSectionRow>
+        </Focusable>
 
         {/* Description */}
-        <PanelSectionRow>
-          <div style={{ color: "#bdc3c7", fontSize: 14 }}>
-            {manifest.description}
-          </div>
-        </PanelSectionRow>
+        <Field
+          focusable={true}
+          description={manifest.description}
+        />
 
         {/* Version */}
         {manifest.version && (
-          <PanelSectionRow>
-            <div style={{ color: "#7f8c8d", fontSize: 12 }}>
-              Version: {manifest.version}
-            </div>
-          </PanelSectionRow>
+          <Field
+            focusable={true}
+            description={`Version: ${manifest.version}`}
+          />
         )}
-      </PanelSection>
 
-      {/* Update */}
+      {/* Unloaded Warning - show for all unloaded extensions */}
+      {status === "unloaded" && (
+        <Field
+          focusable={true}
+          description={
+            <div style={{
+              background: "rgba(230, 126, 34, 0.1)",
+              border: "1px solid #e67e22",
+              borderRadius: 4,
+              padding: 12,
+              color: "#e67e22",
+              fontSize: 13
+            }}>
+              {isLoader
+                ? "Extensions are unloaded because systemd-sysext is not running. This typically happens after a SteamOS update when persistence is disabled."
+                : "This extension is unloaded because systemd-sysext is not running."}
+            </div>
+          }
+        />
+      )}
+
+      {/* Enable Sysext Service button - only show for loader when unloaded */}
+      {status === "unloaded" && isLoader && (
+        <ButtonItem layout="below" onClick={handleEnableSysext}>
+          Enable Sysext Service
+        </ButtonItem>
+      )}
+
+      {/* Update Section Header */}
       {(hasUpdateManager || extension.bundled_update_available) && (
-        <PanelSection title="Update">
-          {/* Bundled extension .raw update */}
-          {extension.bundled_update_available && (
-            <>
-              <PanelSectionRow>
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          onCancel={handleBack}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Update</span>
+          <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+        </Focusable>
+      )}
+
+      {/* Bundled extension .raw update */}
+      {extension.bundled_update_available && (
+        <>
+          <Field
+            focusable={true}
+            description={
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <FaUpload style={{ color: "#f39c12" }} />
+                <span style={{ color: "#f39c12" }}>
+                  Extension update available: v{manifest.version}
+                </span>
+              </div>
+            }
+          />
+          <ButtonItem
+            layout="below"
+            onClick={handleUpdateExt}
+            disabled={updatingExt}
+          >
+            {updatingExt ? "Updating Extension..." : "Update Extension"}
+          </ButtonItem>
+        </>
+      )}
+
+      {/* Upstream software update (via update-manager) */}
+      {hasUpdateManager && (
+        updateInfo.loading ? (
+          <Field
+            focusable={true}
+            description={<span style={{ color: "#8b929a", fontSize: 13 }}>Checking upstream version...</span>}
+          />
+        ) : updateInfo.error ? (
+          <Field
+            focusable={true}
+            description={<span style={{ color: "#e74c3c", fontSize: 13 }}>{updateInfo.error}</span>}
+          />
+        ) : updateInfo.updateAvailable ? (
+          <>
+            <Field
+              focusable={true}
+              description={
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
                   <FaUpload style={{ color: "#f39c12" }} />
                   <span style={{ color: "#f39c12" }}>
-                    Extension update available: v{manifest.version}
+                    Upstream update: v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
                   </span>
                 </div>
-              </PanelSectionRow>
-              <PanelSectionRow>
-                <ButtonItem
-                  layout="below"
-                  onClick={handleUpdateExt}
-                  disabled={updatingExt}
-                >
-                  {updatingExt ? "Updating Extension..." : "Update Extension"}
-                </ButtonItem>
-              </PanelSectionRow>
-            </>
-          )}
-
-          {/* Upstream software update (via update-manager) */}
-          {hasUpdateManager && (
-            updateInfo.loading ? (
-              <PanelSectionRow>
-                <div style={{ color: "#8b929a", fontSize: 13 }}>Checking upstream version...</div>
-              </PanelSectionRow>
-            ) : updateInfo.error ? (
-              <PanelSectionRow>
-                <div style={{ color: "#e74c3c", fontSize: 13 }}>{updateInfo.error}</div>
-              </PanelSectionRow>
-            ) : updateInfo.updateAvailable ? (
-              <>
-                <PanelSectionRow>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                    <FaUpload style={{ color: "#f39c12" }} />
-                    <span style={{ color: "#f39c12" }}>
-                      Upstream update: v{updateInfo.currentVersion} → v{updateInfo.latestVersion}
-                    </span>
-                  </div>
-                </PanelSectionRow>
-                <PanelSectionRow>
-                  <ButtonItem
-                    layout="below"
-                    onClick={handleUpdate}
-                    disabled={updating}
-                  >
-                    {updating ? "Updating..." : "Update Now"}
-                  </ButtonItem>
-                </PanelSectionRow>
-              </>
-            ) : (
-              <PanelSectionRow>
-                <div style={{ color: "#8b929a", fontSize: 13 }}>
-                  Upstream: up to date{updateInfo.currentVersion ? ` (v${updateInfo.currentVersion})` : ""}
-                </div>
-              </PanelSectionRow>
-            )
-          )}
-        </PanelSection>
+              }
+            />
+            <ButtonItem
+              layout="below"
+              onClick={handleUpdate}
+              disabled={updating}
+            >
+              {updating ? "Updating..." : "Update Now"}
+            </ButtonItem>
+          </>
+        ) : (
+          <Field
+            focusable={true}
+            description={
+              <span style={{ color: "#8b929a", fontSize: 13 }}>
+                Upstream: up to date{updateInfo.currentVersion ? ` (v${updateInfo.currentVersion})` : ""}
+              </span>
+            }
+          />
+        )
       )}
 
-      {/* Settings */}
+      {/* Settings Section Header */}
       {hasConfig && (
-        <PanelSection title="Settings">
-          {configLoading && (
-            <PanelSectionRow>
-              <div style={{ color: "#8b929a", fontSize: 13 }}>Loading settings...</div>
-            </PanelSectionRow>
-          )}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          onCancel={handleBack}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Settings</span>
+          <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+        </Focusable>
+      )}
 
-          {configError && (
-            <PanelSectionRow>
-              <div style={{ color: "#e74c3c", fontSize: 13 }}>{configError}</div>
-            </PanelSectionRow>
-          )}
+      {hasConfig && configLoading && (
+        <Field
+          focusable={true}
+          description={<span style={{ color: "#8b929a", fontSize: 13 }}>Loading settings...</span>}
+        />
+      )}
 
-          {!configLoading && !configError && manifest.config!.parameters.map((param) => (
-            <ConfigField
-              key={param.id}
-              param={param}
-              value={configValues[param.id]}
-              onChange={handleFieldChange}
-            />
-          ))}
+      {hasConfig && configError && (
+        <Field
+          focusable={true}
+          description={<span style={{ color: "#e74c3c", fontSize: 13 }}>{configError}</span>}
+        />
+      )}
 
-          {isDirty && (
-            <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                onClick={handleApply}
-                disabled={configSaving}
-              >
-                {configSaving ? "Applying..." : "Apply"}
-              </ButtonItem>
-            </PanelSectionRow>
-          )}
-        </PanelSection>
+      {hasConfig && !configLoading && !configError && manifest.config!.parameters.map((param) => (
+        <ConfigField
+          key={param.id}
+          param={param}
+          value={configValues[param.id]}
+          onChange={handleFieldChange}
+        />
+      ))}
+
+      {hasConfig && isDirty && (
+        <ButtonItem
+          layout="below"
+          onClick={handleApply}
+          disabled={configSaving}
+        >
+          {configSaving ? "Applying..." : "Apply"}
+        </ButtonItem>
+      )}
+
+      {/* README Section Header */}
+      {readme && (
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+          onCancel={handleBack}
+          style={{ marginTop: 16 }}
+        >
+          <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Details</span>
+          <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+        </Focusable>
       )}
 
       {/* README Content */}
       {readme && (
-        <PanelSection title="Details">
-          <PanelSectionRow>
+        <Field
+          focusable={true}
+          description={
             <div
               style={{
                 color: "#bdc3c7",
@@ -640,9 +731,10 @@ export function ExtensionDetail({
             >
               {readme}
             </div>
-          </PanelSectionRow>
-        </PanelSection>
+          }
+        />
       )}
-    </Focusable>
+      </DialogControlsSection>
+    </DialogBody>
   );
 }

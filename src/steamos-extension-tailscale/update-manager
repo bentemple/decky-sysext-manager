@@ -29,6 +29,8 @@ case "${1:-}" in
         ;;
 
     --update)
+        # Change to install script directory so relative paths (e.g., override.conf) work
+        cd "$(dirname "$INSTALL_SCRIPT")"
         exec "$INSTALL_SCRIPT"
         ;;
 

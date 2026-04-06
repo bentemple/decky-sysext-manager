@@ -9,5 +9,17 @@ required: true
 activation:
   mode: reboot
 
+config:
+  path: /var/lib/extensions-config/loader/config
+  parameters:
+    - id: enable_persistence
+      type: boolean
+      label: Enable Persistence
+      description: "Persist extensions across SteamOS updates. Disable if experiencing boot issues. When disabled, you'll need to manually re-mount extensions after updates."
+      default: true
+
+configure:
+  script: ./configure
+
 uninstall:
   script: ./uninstall

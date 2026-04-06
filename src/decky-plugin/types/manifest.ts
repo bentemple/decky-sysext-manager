@@ -70,7 +70,7 @@ export interface ExtensionManifest {
   update_manager?: UpdateManagerSection;
 }
 
-export type ExtensionStatus = "active" | "pending" | "disabled";
+export type ExtensionStatus = "active" | "pending" | "unloaded" | "disabled";
 
 export interface Extension {
   manifest: ExtensionManifest;

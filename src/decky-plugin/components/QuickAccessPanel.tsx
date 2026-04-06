@@ -28,6 +28,8 @@ function StatusIcon({ status, updateAvailable, checkingUpdate }: {
       return <FaCheck style={{ color: "#2ecc71", marginRight: 8 }} />;
     case "pending":
       return <FaClock style={{ color: "#f1c40f", marginRight: 8 }} />;
+    case "unloaded":
+      return <FaClock style={{ color: "#e67e22", marginRight: 8 }} />;
     default:
       return <FaTimes style={{ color: "#95a5a6", marginRight: 8 }} />;
   }
@@ -38,9 +40,11 @@ interface QuickAccessPanelProps {
   loading: boolean;
   error: string | null;
   updateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  sysextStatus: { active: boolean; status: string };
+  onEnableSysext: () => Promise<{ success: boolean; error?: string }>;
 }
 
-export function QuickAccessPanel({ extensions, loading, error, updateManager }: QuickAccessPanelProps) {
+export function QuickAccessPanel({ extensions, loading, error, updateManager, sysextStatus, onEnableSysext }: QuickAccessPanelProps) {
   // Track update state per extension: undefined=not checked, true=available, false=up to date
   const [updateStates, setUpdateStates] = useState<Record<string, { checking: boolean; available: boolean }>>({});
 
@@ -114,14 +118,16 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
   const loader = extensions.find((e) => e.manifest.id === "loader");
   const loaderActive = loader?.status === "active";
 
+  // Show extensions that are installed (.raw file exists) - includes active, pending, and unloaded
   const enabledExtensions = extensions
-    .filter((e) => e.manifest.id !== "loader" && (e.status === "active" || e.status === "pending"))
+    .filter((e) => e.manifest.id !== "loader" && (e.status === "active" || e.status === "pending" || e.status === "unloaded"))
     .sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
 
   const getLoaderStatusText = () => {
     if (!loader) return "Not Found";
     if (loaderActive) return "Active";
     if (loader.status === "pending") return "Pending Reboot";
+    if (loader.status === "unloaded") return "Unloaded";
     return "Disabled";
   };
 
@@ -132,11 +138,11 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
         <PanelSectionRow>
           <ButtonItem
             layout="below"
-            onClick={() => Navigation.Navigate("/sysext-extensions/settings")}
+            onClick={() => Navigation.Navigate("/sysext-manager/settings")}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
               <FaCog style={{ marginRight: 8 }} />
-              Configure Extensions
+              Manage Extensions
             </div>
           </ButtonItem>
         </PanelSectionRow>
@@ -150,6 +156,23 @@ export function QuickAccessPanel({ extensions, loading, error, updateManager }: 
             <span>Extension Loader: {getLoaderStatusText()}</span>
           </div>
         </PanelSectionRow>
+        <PanelSectionRow>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            {sysextStatus.active ? (
+              <FaCheck style={{ color: "#2ecc71", marginRight: 8 }} />
+            ) : (
+              <FaTimes style={{ color: "#e74c3c", marginRight: 8 }} />
+            )}
+            <span>Sysext Service: {sysextStatus.active ? "Active" : "Inactive"}</span>
+          </div>
+        </PanelSectionRow>
+        {!sysextStatus.active && (
+          <PanelSectionRow>
+            <ButtonItem layout="below" onClick={onEnableSysext}>
+              Enable Sysext Service
+            </ButtonItem>
+          </PanelSectionRow>
+        )}
       </PanelSection>
 
       {/* Enabled Extensions */}

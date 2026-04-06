@@ -51,6 +51,11 @@ class ExtensionManager:
     async def refresh_active_extensions(self) -> None:
         """Get list of extensions currently active via systemd-sysext."""
         self._active_extensions = set()
+
+        # Check if systemd-sysext service is active (overlays are mounted)
+        self._sysext_active = self.sys.systemctl_is_active("systemd-sysext")
+        self._log("info", f"systemd-sysext service active: {self._sysext_active}")
+
         try:
             result = self.sys.sysext_list()
             self._log("info", f"systemd-sysext list output: {result.stdout!r}")
@@ -65,31 +70,37 @@ class ExtensionManager:
                         ext_name = parts[0]
                         if ext_name.startswith("steamos-extension-"):
                             self._active_extensions.add(ext_name)
-                            self._log("debug", f"Found active extension: {ext_name}")
-                self._log("info", f"Active extensions: {self._active_extensions}")
+                            self._log("debug", f"Found extension in list: {ext_name}")
+                self._log("info", f"Extensions in sysext list: {self._active_extensions}")
             else:
                 self._log("warning", f"systemd-sysext list failed: {result.stderr}")
         except Exception as e:
             self._log("warning", f"Failed to get active extensions: {e}")
 
     def _get_extension_status(self, ext_id: str) -> str:
-        """Get status: active, pending, or disabled."""
+        """Get status: active, pending, unloaded, or disabled."""
         ext_name = f"steamos-extension-{ext_id}"
         raw_filename = f"{ext_name}.raw"
         raw_path = os.path.join(EXTENSIONS_DIR, raw_filename)
         raw_exists = self.sys.file_exists(raw_path)
-        is_active = ext_name in self._active_extensions
+        in_sysext_list = ext_name in self._active_extensions
+        sysext_running = getattr(self, '_sysext_active', False)
 
         self._log(
             "info",
             f"Status check for '{ext_id}': raw_exists={raw_exists}, "
-            f"is_active={is_active}"
+            f"in_sysext_list={in_sysext_list}, sysext_running={sysext_running}"
         )
 
-        if raw_exists and is_active:
-            return "active"
-        elif raw_exists:
-            return "pending"
+        if raw_exists:
+            if sysext_running and in_sysext_list:
+                return "active"
+            elif sysext_running:
+                # Service running but extension not in list - needs reboot
+                return "pending"
+            else:
+                # Service not running - extensions are unloaded
+                return "unloaded"
         else:
             return "disabled"
 
@@ -143,11 +154,11 @@ class ExtensionManager:
                 status = self._get_extension_status(ext_id)
 
                 # Check if update-manager script exists
-                ext_dir = os.path.join(self.plugin_dir, f"steamos-extension-{ext_id}")
-                update_manager_script = manifest.get("update_manager", {}).get("script", "")
                 has_update_manager = False
-                if update_manager_script:
-                    script_path = os.path.join(ext_dir, update_manager_script.lstrip("./"))
+                if manifest.get("update_manager", {}).get("script"):
+                    script_path = os.path.join(
+                        self.bundled_extensions_dir, f"steamos-extension-{ext_id}.update-manager"
+                    )
                     has_update_manager = self.sys.is_executable(script_path)
 
                 # Read README if available
@@ -287,8 +298,9 @@ class ExtensionManager:
         raw_path = os.path.join(EXTENSIONS_DIR, raw_filename)
 
         # Find the extension's uninstall script
-        ext_dir = os.path.join(self.plugin_dir, f"steamos-extension-{ext_id}")
-        uninstall_script = os.path.join(ext_dir, "uninstall")
+        uninstall_script = os.path.join(
+            self.bundled_extensions_dir, f"steamos-extension-{ext_id}.uninstall"
+        )
 
         try:
             # Run uninstall script if it exists
@@ -298,7 +310,6 @@ class ExtensionManager:
                     for key, value in prompt_answers.items():
                         args.append(f"--{key}={'true' if value else 'false'}")
 
-                self._log("info", f"Running uninstall script: {' '.join(args)}")
                 result = self.sys.run_command(args, timeout=300)
                 if not result.success:
                     self._log("warning", f"Uninstall script returned {result.returncode}: {result.stderr}")
@@ -361,6 +372,11 @@ class ExtensionManager:
                     defaults[param["id"]] = param.get("default")
                 return {"values": defaults}
 
+            # Build a map of parameter types
+            param_types = {}
+            for param in config_section.get("parameters", []):
+                param_types[param["id"]] = param.get("type", "string")
+
             # Parse config file (key=value format)
             values = {}
             config_content = self.sys.read_file(config_path)
@@ -372,7 +388,17 @@ class ExtensionManager:
                     key, value = line.split("=", 1)
                     key = key.strip()
                     value = value.strip().strip('"')
-                    values[key] = value
+                    # Convert value based on parameter type
+                    param_type = param_types.get(key, "string")
+                    if param_type == "boolean":
+                        values[key] = value.lower() in ("true", "1", "yes")
+                    elif param_type in ("integer", "duration"):
+                        try:
+                            values[key] = int(value)
+                        except ValueError:
+                            values[key] = value
+                    else:
+                        values[key] = value
 
             # Merge with defaults for missing values
             for param in config_section.get("parameters", []):
@@ -390,8 +416,9 @@ class ExtensionManager:
         config: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Update configuration for an extension."""
-        ext_dir = os.path.join(self.plugin_dir, f"steamos-extension-{ext_id}")
-        configure_script = os.path.join(ext_dir, "configure")
+        configure_script = os.path.join(
+            self.bundled_extensions_dir, f"steamos-extension-{ext_id}.configure"
+        )
 
         if not self.sys.file_exists(configure_script):
             return {"success": False, "error": "Configure script not found"}
@@ -399,9 +426,11 @@ class ExtensionManager:
         try:
             args = [configure_script]
             for key, value in config.items():
+                # Convert booleans to lowercase strings for shell script consistency
+                if isinstance(value, bool):
+                    value = "true" if value else "false"
                 args.append(f"--{key}={value}")
 
-            self._log("info", f"Running configure script: {' '.join(args)}")
             result = self.sys.run_command(args, timeout=60)
 
             if not result.success:
@@ -432,9 +461,9 @@ class ExtensionManager:
             if not update_manager_section:
                 return {"success": False, "error": "Extension has no update_manager configured"}
 
-            script_rel = update_manager_section.get("script", "")
-            ext_dir = os.path.join(self.plugin_dir, f"steamos-extension-{ext_id}")
-            script_path = os.path.join(ext_dir, script_rel.lstrip("./"))
+            script_path = os.path.join(
+                self.bundled_extensions_dir, f"steamos-extension-{ext_id}.update-manager"
+            )
 
             if not self.sys.file_exists(script_path):
                 return {"success": False, "error": f"update-manager script not found: {script_path}"}
@@ -456,7 +485,6 @@ class ExtensionManager:
             # Timeouts vary by operation
             timeout = 300 if flag == "--update" else (15 if flag == "--get-latest-version" else 5)
 
-            self._log("info", f"Running update-manager for {ext_id}: {script_path} {flag}")
             result = self.sys.run_command([script_path, flag], timeout=timeout)
 
             output = result.stdout.strip()
@@ -497,4 +525,27 @@ class ExtensionManager:
                 return {"success": False, "error": result.stderr}
         except Exception as e:
             self._log("error", f"Error triggering reboot: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_sysext_status(self) -> Dict[str, Any]:
+        """Get the status of the systemd-sysext service."""
+        is_active = self.sys.systemctl_is_active("systemd-sysext")
+        return {
+            "active": is_active,
+            "status": "active" if is_active else "inactive"
+        }
+
+    async def enable_sysext(self) -> Dict[str, Any]:
+        """Enable and start the systemd-sysext service."""
+        try:
+            result = self.sys.systemctl_enable("systemd-sysext")
+            if result.success:
+                await self.refresh_active_extensions()
+                self._log("info", "Enabled systemd-sysext service")
+                return {"success": True}
+            else:
+                self._log("error", f"Failed to enable systemd-sysext: {result.stderr}")
+                return {"success": False, "error": result.stderr}
+        except Exception as e:
+            self._log("error", f"Error enabling systemd-sysext: {e}")
             return {"success": False, "error": str(e)}

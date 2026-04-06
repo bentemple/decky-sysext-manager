@@ -17,6 +17,8 @@ if systemctl is-enabled --quiet tailscaled 2>/dev/null && [[ -x "$TAILSCALE_BIN"
 fi
 
 echo "Running Tailscale installer..."
+# Change to install script directory so relative paths (e.g., override.conf) work
+cd "$(dirname "$INSTALL_SCRIPT")"
 if "$INSTALL_SCRIPT"; then
     # Record the installed version for the update-manager
     if [[ -x "$TAILSCALE_BIN" ]]; then

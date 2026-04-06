@@ -10,17 +10,24 @@ const getConfig = callable<[ext_id: string], ExtensionConfig>("get_config");
 const configureExtension = callable<[ext_id: string, config: Record<string, string | number>], { success: boolean; error?: string }>("configure_extension");
 const runUpdateManager = callable<[ext_id: string, flag: string], { success: boolean; output: string; error?: string }>("run_update_manager");
 const reboot = callable<[], { success: boolean; error?: string }>("reboot");
+const getSysextStatus = callable<[], { active: boolean; status: string }>("get_sysext_status");
+const enableSysext = callable<[], { success: boolean; error?: string }>("enable_sysext");
 
 export function useExtensions() {
   const [extensions, setExtensions] = useState<Extension[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sysextStatus, setSysextStatus] = useState<{ active: boolean; status: string }>({ active: true, status: "unknown" });
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const exts = await getExtensions();
+      const [exts, sysext] = await Promise.all([
+        getExtensions(),
+        getSysextStatus()
+      ]);
       setExtensions(exts);
+      setSysextStatus(sysext);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -73,10 +80,30 @@ export function useExtensions() {
     return await reboot();
   }, []);
 
+  const enableSysextService = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    const result = await enableSysext();
+    if (result.success) {
+      await refresh();
+    }
+    return result;
+  }, [refresh]);
+
+  // Refresh and return a specific extension by ID
+  const refreshAndGetExtension = useCallback(async (extId: string): Promise<Extension | undefined> => {
+    const [exts, sysext] = await Promise.all([
+      getExtensions(),
+      getSysextStatus()
+    ]);
+    setExtensions(exts);
+    setSysextStatus(sysext);
+    return exts.find(e => e.manifest.id === extId);
+  }, []);
+
   return {
     extensions,
     loading,
     error,
+    sysextStatus,
     refresh,
     enable,
     disable,
@@ -85,5 +112,7 @@ export function useExtensions() {
     saveConfig,
     updateManager,
     triggerReboot,
+    enableSysextService,
+    refreshAndGetExtension,
   };
 }

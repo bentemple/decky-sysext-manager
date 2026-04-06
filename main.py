@@ -23,7 +23,7 @@ class Plugin:
 
     def __init__(self):
         self.manager = ExtensionManager(
-            sys_ops=RealSystemOps(),
+            sys_ops=RealSystemOps(logger=decky.logger),
             plugin_dir=PLUGIN_DIR,
             logger=decky.logger
         )
@@ -78,3 +78,11 @@ class Plugin:
     async def reboot(self) -> dict:
         """Trigger system reboot."""
         return await self.manager.reboot()
+
+    async def get_sysext_status(self) -> dict:
+        """Get the status of the systemd-sysext service."""
+        return self.manager.get_sysext_status()
+
+    async def enable_sysext(self) -> dict:
+        """Enable and start the systemd-sysext service."""
+        return await self.manager.enable_sysext()

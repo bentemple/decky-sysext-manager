@@ -1,6 +1,25 @@
 #!/usr/bin/env zsh
 set -e
 
+# Read persistence config (default: true for backwards compatibility)
+ENABLE_PERSISTENCE=true
+CONFIG_FILE="/var/lib/extensions-config/loader/config"
+if [[ -f "$CONFIG_FILE" ]]; then
+	while IFS='=' read -r key value; do
+		[[ "$key" == "enable_persistence" ]] && ENABLE_PERSISTENCE="$value"
+	done < "$CONFIG_FILE"
+fi
+
+if [[ "$ENABLE_PERSISTENCE" != "true" ]]; then
+	# Persistence disabled - clean up /etc/ files if they exist
+	rm -f /etc/atomic-update.conf.d/steamos-extension-loader.conf
+	rm -f /etc/systemd/system/steamos-extension-loader.service
+	rm -f /etc/steamos-extension-loader
+	systemctl daemon-reload || true
+	exit 0
+fi
+
+# Persistence enabled - proceed with normal installation to /etc/
 function same {
 	[[ -f $1 ]] && [[ -f $2 ]] && [[ "$(md5sum < $1)" == "$(md5sum < $2)" ]]
 }

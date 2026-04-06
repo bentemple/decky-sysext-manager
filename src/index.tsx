@@ -7,7 +7,7 @@ import { QuickAccessPanel } from "./decky-plugin/components/QuickAccessPanel";
 import { SettingsView } from "./decky-plugin/components/SettingsView";
 
 function QuickAccessContent() {
-  const { extensions, loading, error, updateManager } = useExtensions();
+  const { extensions, loading, error, updateManager, sysextStatus, enableSysextService } = useExtensions();
 
   return (
     <QuickAccessPanel
@@ -15,26 +15,28 @@ function QuickAccessContent() {
       loading={loading}
       error={error}
       updateManager={updateManager}
+      sysextStatus={sysextStatus}
+      onEnableSysext={enableSysextService}
     />
   );
 }
 
 export default definePlugin(() => {
-  console.log("Sysext Extensions plugin initializing");
+  console.log("Sysext Manager plugin initializing");
 
   // Register settings page route
-  routerHook.addRoute("/sysext-extensions/settings", SettingsView, {
+  routerHook.addRoute("/sysext-manager/settings", SettingsView, {
     exact: true,
   });
 
   return {
-    name: "Sysext Extensions",
-    title: <div className={staticClasses.Title}>Sysext Extensions</div>,
+    name: "Sysext Manager",
+    title: <div className={staticClasses.Title}>Sysext Manager</div>,
     content: <QuickAccessContent />,
     icon: <FaCogs />,
     onDismount() {
-      console.log("Sysext Extensions plugin unloading");
-      routerHook.removeRoute("/sysext-extensions/settings");
+      console.log("Sysext Manager plugin unloading");
+      routerHook.removeRoute("/sysext-manager/settings");
     },
   };
 });

@@ -6,8 +6,9 @@ import {
   ButtonItem,
   Focusable,
   showModal,
+  ModalRoot,
 } from "@decky/ui";
-import { toaster } from "@decky/api";
+import { showToast } from "../utils/toast";
 import { FaChevronRight, FaUpload } from "react-icons/fa";
 import { Extension, ExtensionStatus } from "../types/manifest";
 import { useExtensions } from "../hooks/useExtensions";
@@ -20,11 +21,13 @@ function StatusBadge({ status }: { status: ExtensionStatus }) {
   const colors: Record<ExtensionStatus, string> = {
     active: "#2ecc71",
     pending: "#f1c40f",
+    unloaded: "#e67e22",
     disabled: "#95a5a6",
   };
   const labels: Record<ExtensionStatus, string> = {
     active: "Active",
     pending: "Pending",
+    unloaded: "Unloaded",
     disabled: "Disabled",
   };
 
@@ -49,14 +52,17 @@ function ExtensionRow({
   extension,
   onSelect,
   showExperimentalTag,
+  upstreamUpdateAvailable,
 }: {
   extension: Extension;
   onSelect: (ext: Extension) => void;
   showExperimentalTag?: boolean;
+  upstreamUpdateAvailable?: boolean;
 }) {
   const { manifest, status } = extension;
   const isLoader = manifest.id === "loader";
   const isExperimental = manifest.release_status !== "release" && manifest.release_status !== "disabled" && manifest.id !== "loader";
+  const hasUpdate = extension.bundled_update_available || upstreamUpdateAvailable;
 
   return (
     <Focusable
@@ -96,7 +102,7 @@ function ExtensionRow({
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginLeft: 12 }}>
-        {extension.bundled_update_available && (
+        {hasUpdate && (
           <FaUpload style={{ color: "#f39c12", fontSize: 12 }} />
         )}
         <StatusBadge status={status} />
@@ -130,14 +136,57 @@ function sortCategories(categories: string[]): string[] {
   );
 }
 
-// Walk up the DOM to find the first scrollable ancestor
-function findScrollContainer(el: HTMLElement | null): HTMLElement | null {
-  while (el && el !== document.body) {
-    const { overflowY } = window.getComputedStyle(el);
-    if (overflowY === "auto" || overflowY === "scroll") return el;
-    el = el.parentElement;
-  }
-  return null;
+// Modal wrapper for ExtensionDetail - handles B button close naturally
+function ExtensionDetailModal({
+  extension,
+  loaderEnabled,
+  onToggle,
+  onLoadConfig,
+  onSaveConfig,
+  onUpdateManager,
+  onUpdateExt,
+  onEnableSysext,
+  onUpdateComplete,
+  onRefresh,
+  closeModal,
+}: {
+  extension: Extension;
+  loaderEnabled: boolean;
+  onToggle: (ext: Extension, enabled: boolean) => Promise<void>;
+  onLoadConfig: (extId: string) => Promise<import("../types/manifest").ExtensionConfig>;
+  onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
+  onUpdateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  onUpdateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
+  onEnableSysext: () => Promise<{ success: boolean; error?: string }>;
+  onUpdateComplete?: (extId: string) => void;
+  onRefresh: () => Promise<Extension | undefined>;
+  closeModal?: () => void;
+}) {
+  const handleBack = () => {
+    closeModal?.();
+  };
+
+  return (
+    <ModalRoot
+      onCancel={handleBack}
+      closeModal={handleBack}
+      bAllowFullSize={true}
+    >
+      <ExtensionDetail
+        extension={extension}
+        loaderEnabled={loaderEnabled}
+        onBack={handleBack}
+        onToggle={onToggle}
+        onLoadConfig={onLoadConfig}
+        onSaveConfig={onSaveConfig}
+        onUpdateManager={onUpdateManager}
+        onUpdateExt={onUpdateExt}
+        onEnableSysext={onEnableSysext}
+        onUpdateComplete={onUpdateComplete}
+        onRefresh={onRefresh}
+      />
+    </ModalRoot>
+  );
 }
 
 // Extension list page - shared between tabs
@@ -151,6 +200,8 @@ function ExtensionListPage({
   loadConfig,
   saveConfig,
   updateManager,
+  enableSysext,
+  refreshAndGetExtension,
   filterFn,
   showLoader,
   showExperimentalTags,
@@ -165,6 +216,8 @@ function ExtensionListPage({
   loadConfig: (extId: string) => Promise<import("../types/manifest").ExtensionConfig>;
   saveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
   updateManager: (extId: string, flag: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  enableSysext: () => Promise<{ success: boolean; error?: string }>;
+  refreshAndGetExtension: (extId: string) => Promise<Extension | undefined>;
   filterFn: (e: Extension) => boolean;
   showLoader: boolean;
   showExperimentalTags?: boolean;
@@ -172,11 +225,32 @@ function ExtensionListPage({
 }) {
   const loader = extensions.find((e) => e.manifest.id === "loader");
 
-  const [selectedExt, setSelectedExt] = useState<Extension | null>(null);
   const [pendingReboot, setPendingReboot] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
-  const savedScrollTop = useRef<number>(0);
+
+  // Track upstream update state per extension
+  const [upstreamUpdates, setUpstreamUpdates] = useState<Record<string, boolean>>({});
+
+  // Check for upstream updates for extensions with update_manager
+  useEffect(() => {
+    const extensionsToCheck = extensions.filter(
+      (e) => e.has_update_manager && (e.status === "active" || e.status === "pending") && !(e.manifest.id in upstreamUpdates)
+    );
+
+    for (const ext of extensionsToCheck) {
+      Promise.all([
+        updateManager(ext.manifest.id, "--get-current-version"),
+        updateManager(ext.manifest.id, "--get-latest-version"),
+      ]).then(([cur, lat]) => {
+        const current = cur.output?.trim() || "";
+        const latest = lat.output?.trim() || "";
+        const available = !!latest && !!current && current !== latest;
+        setUpstreamUpdates((prev) => ({ ...prev, [ext.manifest.id]: available }));
+      }).catch(() => {
+        setUpstreamUpdates((prev) => ({ ...prev, [ext.manifest.id]: false }));
+      });
+    }
+  }, [extensions, updateManager]);
 
   // Stable membership: snapshot grows when new matching extensions appear, never shrinks.
   // IDs are added on first match; removed only when component unmounts (tab switch).
@@ -193,40 +267,11 @@ function ExtensionListPage({
     return ext ? [ext] : [];
   });
 
-  // Discover the scroll container once we have a DOM element to walk up from
-  useEffect(() => {
-    if (rootRef.current && !scrollContainerRef.current) {
-      scrollContainerRef.current = findScrollContainer(rootRef.current);
-    }
-  });
 
-  const loaderEnabled = loader?.status === "active" || loader?.status === "pending";
+  // Loader is "enabled" if .raw file exists (active, pending, or unloaded)
+  const loaderEnabled = loader?.status === "active" || loader?.status === "pending" || loader?.status === "unloaded";
   const categories = groupExtensionsByCategory(stableExtensions);
   const sortedCategories = sortCategories(Object.keys(categories));
-
-  // Keep selectedExt live
-  const liveSelectedExt = selectedExt ? (byId.get(selectedExt.manifest.id) ?? selectedExt) : null;
-
-  const handleSelectExtension = useCallback((ext: Extension) => {
-    savedScrollTop.current = scrollContainerRef.current?.scrollTop ?? 0;
-    setSelectedExt(ext);
-    // Scroll to top for the detail view
-    requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = 0;
-      }
-    });
-  }, []);
-
-  const handleBack = useCallback(() => {
-    setSelectedExt(null);
-    // Restore list scroll position after React re-renders
-    requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = savedScrollTop.current;
-      }
-    });
-  }, []);
 
   const handleToggle = useCallback(
     async (ext: Extension, doEnable: boolean) => {
@@ -235,13 +280,13 @@ function ExtensionListPage({
         if (result.success) {
           if (result.needs_reboot) {
             setPendingReboot(true);
-            toaster.toast({
+            showToast({
               title: `${ext.manifest.name} Enabled`,
               body: "Reboot required to activate",
             });
           }
         } else {
-          toaster.toast({ title: "Error", body: result.error || "Failed to enable" });
+          showToast({ title: "Error", body: result.error || "Failed to enable" });
         }
       } else {
         if (ext.manifest.uninstall?.prompts?.length) {
@@ -253,7 +298,7 @@ function ExtensionListPage({
                 const result = await disable(ext.manifest.id, answers);
                 if (result.success && result.needs_reboot) {
                   setPendingReboot(true);
-                  toaster.toast({
+                  showToast({
                     title: `${ext.manifest.name} Disabled`,
                     body: "Reboot required",
                   });
@@ -266,7 +311,7 @@ function ExtensionListPage({
           const result = await disable(ext.manifest.id, {});
           if (result.success && result.needs_reboot) {
             setPendingReboot(true);
-            toaster.toast({
+            showToast({
               title: `${ext.manifest.name} Disabled`,
               body: "Reboot required",
             });
@@ -277,24 +322,42 @@ function ExtensionListPage({
     [enable, disable]
   );
 
-  const handleReboot = useCallback(async () => {
-    await triggerReboot();
-  }, [triggerReboot]);
+  // Callback to clear upstream update state after an update completes
+  const handleUpdateComplete = useCallback((extId: string) => {
+    // Remove from cache so it gets re-checked
+    setUpstreamUpdates((prev) => {
+      const next = { ...prev };
+      delete next[extId];
+      return next;
+    });
+  }, []);
 
-  if (liveSelectedExt) {
-    return (
-      <ExtensionDetail
-        extension={liveSelectedExt}
-        loaderEnabled={loaderEnabled}
-        onBack={handleBack}
+  const handleSelectExtension = useCallback((ext: Extension) => {
+    // Get the live extension data
+    const liveExt = byId.get(ext.manifest.id) ?? ext;
+    const isLoaderEnabled = loader?.status === "active" || loader?.status === "pending" || loader?.status === "unloaded";
+    const extId = ext.manifest.id;
+
+    // Use showModal to display detail - B button will naturally close the modal
+    showModal(
+      <ExtensionDetailModal
+        extension={liveExt}
+        loaderEnabled={isLoaderEnabled}
         onToggle={handleToggle}
         onLoadConfig={loadConfig}
         onSaveConfig={saveConfig}
         onUpdateManager={updateManager}
         onUpdateExt={updateExt}
+        onEnableSysext={enableSysext}
+        onUpdateComplete={handleUpdateComplete}
+        onRefresh={() => refreshAndGetExtension(extId)}
       />
     );
-  }
+  }, [byId, loader, handleToggle, loadConfig, saveConfig, updateManager, updateExt, enableSysext, handleUpdateComplete, refreshAndGetExtension]);
+
+  const handleReboot = useCallback(async () => {
+    await triggerReboot();
+  }, [triggerReboot]);
 
   return (
     <div ref={rootRef}>
@@ -310,7 +373,11 @@ function ExtensionListPage({
 
       {showLoader && loader && (
         <PanelSection title="Required">
-          <ExtensionRow extension={loader} onSelect={handleSelectExtension} />
+          <ExtensionRow
+            extension={loader}
+            onSelect={handleSelectExtension}
+            upstreamUpdateAvailable={upstreamUpdates[loader.manifest.id]}
+          />
         </PanelSection>
       )}
 
@@ -351,6 +418,7 @@ function ExtensionListPage({
               extension={ext}
               onSelect={handleSelectExtension}
               showExperimentalTag={showExperimentalTags}
+              upstreamUpdateAvailable={upstreamUpdates[ext.manifest.id]}
             />
           ))}
         </PanelSection>
@@ -371,7 +439,7 @@ function ExtensionListPage({
 
 // Main settings view with sidebar navigation
 export function SettingsView() {
-  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager } = useExtensions();
+  const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager, enableSysextService, refreshAndGetExtension } = useExtensions();
 
   const sharedProps = {
     extensions,
@@ -383,11 +451,13 @@ export function SettingsView() {
     loadConfig,
     saveConfig,
     updateManager,
+    enableSysext: enableSysextService,
+    refreshAndGetExtension,
   };
 
   return (
     <SidebarNavigation
-      title="SteamOS Extensions"
+      title="Sysext Manager"
       showTitle={true}
       pages={[
         {
@@ -397,7 +467,7 @@ export function SettingsView() {
             <ExtensionListPage
               {...sharedProps}
               key="enabled"
-              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status !== "disabled" && (e.status === "active" || e.status === "pending")}
+              filterFn={(e) => e.manifest.id !== "loader" && e.manifest.release_status !== "disabled" && (e.status === "active" || e.status === "pending" || e.status === "unloaded")}
               showLoader={true}
               showExperimentalTags={true}
               emptyMessage="No extensions enabled."
