@@ -32,3 +32,7 @@ done
 for key in "${!config[@]}"; do
     echo "$key=${config[$key]}" >> "$CONFIG_FILE"
 done
+
+if [[ -f "/usr/sbin/steamos-extension-loader-installer" ]]; then
+    sudo /usr/sbin/steamos-extension-loader-installer
+fi
