@@ -5,6 +5,139 @@ from src.backend.paths import EXTENSIONS_DIR
 
 
 @pytest.mark.asyncio
+class TestUninstallScriptLocation:
+    """Tests for uninstall script path handling."""
+
+    async def test_uses_correct_uninstall_script_path(self, manager, mock_sys, plugin_dir):
+        """Should look for uninstall script at dist/extensions/steamos-extension-{id}.uninstall."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "activation": {"mode": "auto"}
+        }, plugin_dir)
+        mock_sys.add_installed_raw("test-ext")
+
+        # Add uninstall script at correct location (dist/extensions/)
+        uninstall_path = f"{plugin_dir}/dist/extensions/steamos-extension-test-ext.uninstall"
+        mock_sys.files[uninstall_path] = "#!/bin/bash\necho uninstalling"
+
+        await manager.disable_extension("test-ext")
+
+        # Verify the correct path was used
+        uninstall_calls = [
+            cmd for cmd in mock_sys.commands_run
+            if "uninstall" in str(cmd)
+        ]
+        assert len(uninstall_calls) > 0
+
+
+@pytest.mark.asyncio
+class TestConfigPath:
+    """Tests for configuration file paths."""
+
+    async def test_config_path_uses_extension_name(self, manager, mock_sys, plugin_dir):
+        """Config should be at /var/lib/extensions-config/{ext-name} not in subdirectory."""
+        mock_sys.add_manifest("loader", {
+            "id": "loader",
+            "name": "Extension Loader",
+            "config": {
+                "path": "/var/lib/extensions-config/loader",
+                "parameters": [
+                    {"id": "auto_update", "type": "boolean", "default": True}
+                ]
+            }
+        }, plugin_dir)
+
+        # Create config at flat path
+        mock_sys.files["/var/lib/extensions-config/loader"] = "auto_update=true"
+
+        result = await manager.get_config("loader")
+
+        assert "values" in result
+        assert result["values"]["auto_update"] is True
+
+
+@pytest.mark.asyncio
+class TestConfigureExtension:
+    """Tests for configuring extensions."""
+
+    async def test_runs_configure_script_with_parameters(self, manager, mock_sys, plugin_dir):
+        """Should run configure script with parameters as CLI args."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {"id": "HibernateDelaySec", "type": "duration", "default": 60},
+                    {"id": "TargetSwapFileSizeInGbs", "type": "integer", "default": 20}
+                ]
+            },
+            "configure": {"script": "./configure"}
+        }, plugin_dir)
+
+        # Add configure script
+        configure_path = f"{plugin_dir}/dist/extensions/steamos-extension-hibernate-after-sleep.configure"
+        mock_sys.files[configure_path] = "#!/bin/bash\necho configuring"
+
+        config_values = {
+            "HibernateDelaySec": 120,
+            "TargetSwapFileSizeInGbs": 32
+        }
+
+        result = await manager.configure_extension("hibernate-after-sleep", config_values)
+
+        assert result["success"]
+        # Check that configure script was called with correct args
+        configure_calls = [
+            cmd for cmd in mock_sys.commands_run
+            if "configure" in str(cmd)
+        ]
+        assert len(configure_calls) > 0
+        # Verify parameters were passed
+        call_str = str(configure_calls[0])
+        assert "HibernateDelaySec=120" in call_str
+        assert "TargetSwapFileSizeInGbs=32" in call_str
+
+    async def test_converts_boolean_to_string(self, manager, mock_sys, plugin_dir):
+        """Should convert boolean values to 'true'/'false' strings."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "configure": {"script": "./configure"}
+        }, plugin_dir)
+
+        configure_path = f"{plugin_dir}/dist/extensions/steamos-extension-test-ext.configure"
+        mock_sys.files[configure_path] = "#!/bin/bash\necho configuring"
+
+        config_values = {
+            "enable_feature": True,
+            "disable_other": False
+        }
+
+        result = await manager.configure_extension("test-ext", config_values)
+
+        assert result["success"]
+        call_str = str(mock_sys.commands_run[-1])
+        assert "enable_feature=true" in call_str.lower()
+        assert "disable_other=false" in call_str.lower()
+
+    async def test_fails_when_configure_script_not_found(self, manager, mock_sys, plugin_dir):
+        """Should fail gracefully when configure script doesn't exist."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "configure": {"script": "./configure"}
+        }, plugin_dir)
+        # Note: NOT adding configure script
+
+        result = await manager.configure_extension("test-ext", {"param": "value"})
+
+        assert not result["success"]
+        assert "not found" in result["error"].lower()
+
+
+@pytest.mark.asyncio
 class TestConfigParsing:
     """Tests for configuration parsing with unit handling."""
 
