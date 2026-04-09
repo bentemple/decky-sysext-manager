@@ -298,12 +298,13 @@ export function ExtensionDetail({
 
   const isDirty = hasConfig && JSON.stringify(configValues) !== JSON.stringify(savedValues);
 
+  const titleRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus status field on mount so B button works immediately
+  // Auto-focus title on mount so B button works immediately and focus starts at top
   useLayoutEffect(() => {
     requestAnimationFrame(() => {
-      statusRef.current?.focus();
+      titleRef.current?.focus();
     });
   }, []);
 
@@ -371,6 +372,10 @@ export function ExtensionDetail({
       setConfigSaving(false);
     }
   }, [manifest.id, configValues, onSaveConfig]);
+
+  const handleReset = useCallback(() => {
+    setConfigValues({ ...savedValues });
+  }, [savedValues]);
 
   const handleUpdate = useCallback(async () => {
     setUpdating(true);
@@ -448,7 +453,7 @@ export function ExtensionDetail({
   return (
     <DialogBody>
       <DialogControlsSection>
-        {/* Header: Back button + Title + Pinned X button */}
+        {/* Header: Title + Back + X button (reverse DOM order for upward navigation) */}
         <div
           style={{
             display: "flex",
@@ -458,12 +463,9 @@ export function ExtensionDetail({
             position: "relative",
           }}
         >
-          {/* Pinned X button - absolute positioned */}
+          {/* X button - first in DOM (third when navigating up from title) */}
           <Focusable
             style={{
-              position: "absolute",
-              top: 8,
-              right: 16,
               width: 28,
               height: 28,
               borderRadius: "50%",
@@ -473,13 +475,16 @@ export function ExtensionDetail({
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              zIndex: 10,
+              flexShrink: 0,
+              order: 3,
             }}
             onActivate={handleBack}
             onCancel={handleBack}
           >
             <FaTimes style={{ fontSize: 12, color: "#ccc" }} />
           </Focusable>
+
+          {/* Back button - second in DOM (second when navigating up from title) */}
           <Focusable
             style={{
               display: "flex",
@@ -491,6 +496,7 @@ export function ExtensionDetail({
               cursor: "pointer",
               fontSize: 13,
               flexShrink: 0,
+              order: 2,
             }}
             onActivate={handleBack}
             onCancel={handleBack}
@@ -499,9 +505,24 @@ export function ExtensionDetail({
             <span>Back</span>
           </Focusable>
 
-          <span style={{ fontSize: 18, fontWeight: "bold", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {/* Title - third in DOM (first when navigating up from title, wraps to status) */}
+          <Focusable
+            ref={titleRef}
+            style={{
+              fontSize: 18,
+              fontWeight: "bold",
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+              padding: "6px 0",
+              order: 1,
+            }}
+            onCancel={handleBack}
+          >
             {manifest.name}
-          </span>
+          </Focusable>
         </div>
 
         {/* Divider */}
@@ -657,50 +678,62 @@ export function ExtensionDetail({
         )
       )}
 
-      {/* Settings Section Header */}
+      {/* Settings Section */}
       {hasConfig && (
         <Focusable
-          // @ts-ignore
-          focusableIfNoChildren={true}
-          onCancel={handleBack}
           style={{ marginTop: 16 }}
+          onCancel={handleBack}
         >
-          <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Settings</span>
-          <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+          {/* Settings Header */}
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Settings</span>
+            <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+          </div>
+
+          {configLoading && (
+            <Field
+              focusable={true}
+              description={<span style={{ color: "#8b929a", fontSize: 13 }}>Loading settings...</span>}
+            />
+          )}
+
+          {configError && (
+            <Field
+              focusable={true}
+              description={<span style={{ color: "#e74c3c", fontSize: 13 }}>{configError}</span>}
+            />
+          )}
+
+          {!configLoading && !configError && manifest.config!.parameters.map((param) => (
+            <ConfigField
+              key={param.id}
+              param={param}
+              value={configValues[param.id]}
+              onChange={handleFieldChange}
+            />
+          ))}
+
+          {isDirty && (
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <ButtonItem
+                layout="below"
+                onClick={handleReset}
+                disabled={configSaving}
+                style={{ flex: 1 }}
+              >
+                Reset
+              </ButtonItem>
+              <ButtonItem
+                layout="below"
+                onClick={handleApply}
+                disabled={configSaving}
+                style={{ flex: 1 }}
+              >
+                {configSaving ? "Applying..." : "Apply"}
+              </ButtonItem>
+            </div>
+          )}
         </Focusable>
-      )}
-
-      {hasConfig && configLoading && (
-        <Field
-          focusable={true}
-          description={<span style={{ color: "#8b929a", fontSize: 13 }}>Loading settings...</span>}
-        />
-      )}
-
-      {hasConfig && configError && (
-        <Field
-          focusable={true}
-          description={<span style={{ color: "#e74c3c", fontSize: 13 }}>{configError}</span>}
-        />
-      )}
-
-      {hasConfig && !configLoading && !configError && manifest.config!.parameters.map((param) => (
-        <ConfigField
-          key={param.id}
-          param={param}
-          value={configValues[param.id]}
-          onChange={handleFieldChange}
-        />
-      ))}
-
-      {hasConfig && isDirty && (
-        <ButtonItem
-          layout="below"
-          onClick={handleApply}
-          disabled={configSaving}
-        >
-          {configSaving ? "Applying..." : "Apply"}
-        </ButtonItem>
       )}
 
       {/* README Section Header */}
