@@ -9,7 +9,7 @@
     "clean": "rm -rf dist/ py_modules/backend/",
     "rebuild-extension-images": "rm -rf assets/extensions/*.raw && ./build-extension-images.sh",
     "validate": "./scripts/validate-extensions.sh",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": ".venv/bin/python -m pytest tests/ -v"
   },
   "repository": {
     "type": "git",
