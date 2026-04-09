@@ -177,7 +177,23 @@ systemctl daemon-reload
 echo "  Reloaded"
 
 echo ""
-echo "Step 7: Removing extension..."
+echo "Step 7: Configuration file cleanup..."
+config_file="/var/lib/extensions-config/hibernate-after-sleep"
+if [[ -f "$config_file" ]]; then
+	read -p "Remove configuration file? [y/N] " -n 1 -r
+	echo
+	if [[ $REPLY =~ ^[Yy]$ ]]; then
+		rm -f "$config_file"
+		echo "  Removed configuration file"
+	else
+		echo "  Configuration file kept"
+	fi
+else
+	echo "  Configuration file not found (skipping)"
+fi
+
+echo ""
+echo "Step 8: Removing extension..."
 extension_file="/var/lib/extensions/steamos-extension-hibernate-after-sleep.raw"
 if [[ -f "$extension_file" ]]; then
 	rm -f "$extension_file"
@@ -192,10 +208,10 @@ echo ""
 read -p "Remove uninstall script? [y/N] " -n 1 -r
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-	
+
     echo "Cleaning up uninstall script..."
-    if [[ -f "/home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh" ]]; then
-        rm -f /home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh
+    if [[ -f "/home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall" ]]; then
+        rm -f /home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall
         echo "  Removed uninstall script"
     fi
 fi

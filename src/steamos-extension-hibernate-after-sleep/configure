@@ -3,7 +3,7 @@
 # Called by Decky plugin with CLI args: --HibernateDelaySec=30min --TargetSwapFileSizeInGbs=16
 set -e
 
-CONFIG_FILE="/home/deck/.config/hibernate-after-sleep"
+CONFIG_FILE="/var/lib/extensions-config/hibernate-after-sleep"
 INSTALL_SCRIPT="/usr/sbin/steamos-extension-hibernate-after-sleep-install"
 
 # Parse CLI arguments

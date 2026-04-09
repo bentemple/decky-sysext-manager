@@ -21,14 +21,14 @@ Configuration
 To configure the hibernate delay and swap file size:
 
 1. Create the configuration directory:
-   mkdir -p /home/deck/.config
+   sudo mkdir -p /var/lib/extensions-config
 
 2. Copy the example configuration:
    cp /usr/share/doc/steamos-extension-hibernate-after-sleep/example-config \
-      /home/deck/.config/hibernate-after-sleep
+      /var/lib/extensions-config/hibernate-after-sleep
 
 3. Edit the configuration file:
-   nano /home/deck/.config/hibernate-after-sleep
+   sudo nano /var/lib/extensions-config/hibernate-after-sleep
 
 4. Set your desired values:
    - HibernateDelaySec (default: 60min)

@@ -6,7 +6,7 @@ HibernateDelaySec="60min"
 FORCE=0
 
 function load_config {
-	local config_file="/home/deck/.config/hibernate-after-sleep"
+	local config_file="/var/lib/extensions-config/hibernate-after-sleep"
 	if [[ -f "$config_file" ]]; then
 		local value=$(grep -E '^HibernateDelaySec=' "$config_file" | head -1 | cut -d= -f2 | tr -d '"' | grep -oE '^[0-9]+[a-z]+( [0-9]+[a-z]+)*$')
 		if [[ -n "$value" ]]; then
@@ -229,8 +229,8 @@ function enable_resume_services {
 
 function install_uninstall_script {
 	local bin_dir="/home/deck/.bin"
-	local uninstall_source="/usr/share/doc/steamos-extension-hibernate-after-sleep/steamos-extension-hibernate-after-sleep-uninstall.sh"
-	local uninstall_dest="$bin_dir/steamos-extension-hibernate-after-sleep-uninstall.sh"
+	local uninstall_source="/usr/sbin/steamos-extension-hibernate-after-sleep-uninstall"
+	local uninstall_dest="$bin_dir/steamos-extension-hibernate-after-sleep-uninstall"
 
 	mkdir -p "$bin_dir"
 	chown deck:deck "$bin_dir"

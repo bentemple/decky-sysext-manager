@@ -17,7 +17,7 @@ Auto-hibernates after configurable suspend duration (default 60min). Configures 
 ### Docs
 - `/usr/share/doc/steamos-extension-hibernate-after-sleep/example-config`
 - `/usr/share/doc/steamos-extension-hibernate-after-sleep/README`
-- `/usr/share/doc/steamos-extension-hibernate-after-sleep/steamos-extension-hibernate-after-sleep-uninstall.sh`
+- `/usr/sbin/steamos-extension-hibernate-after-sleep-uninstall`
 
 ## Runtime Changes
 
