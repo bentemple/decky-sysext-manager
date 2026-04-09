@@ -33,3 +33,8 @@ cli/
 
 # Environment
 .env
+
+.tldr
+.tldrignore
+.claude/*
+!.claude/CLAUDE.md
