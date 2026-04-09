@@ -5,6 +5,168 @@ from src.backend.paths import EXTENSIONS_DIR
 
 
 @pytest.mark.asyncio
+class TestConfigParsing:
+    """Tests for configuration parsing with unit handling."""
+
+    async def test_parses_duration_with_unit_suffix(self, manager, mock_sys, plugin_dir):
+        """Should strip unit suffix from duration values (e.g., '60min' -> 60)."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "HibernateDelaySec",
+                        "type": "duration",
+                        "unit": "min",
+                        "default": 60
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        # Simulate config file with unit suffix
+        mock_sys.files["/var/lib/extensions-config/hibernate-after-sleep"] = "HibernateDelaySec=60min"
+
+        result = await manager.get_config("hibernate-after-sleep")
+
+        assert result["values"]["HibernateDelaySec"] == 60
+
+    async def test_parses_integer_with_unit_suffix(self, manager, mock_sys, plugin_dir):
+        """Should strip unit suffix from integer values (e.g., '20GB' -> 20)."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "TargetSwapFileSizeInGbs",
+                        "type": "integer",
+                        "unit": "GB",
+                        "default": 20
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        mock_sys.files["/var/lib/extensions-config/hibernate-after-sleep"] = "TargetSwapFileSizeInGbs=20GB"
+
+        result = await manager.get_config("hibernate-after-sleep")
+
+        assert result["values"]["TargetSwapFileSizeInGbs"] == 20
+
+    async def test_parses_plain_integer_without_suffix(self, manager, mock_sys, plugin_dir):
+        """Should parse plain integers without suffix."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "HibernateDelaySec",
+                        "type": "duration",
+                        "unit": "min",
+                        "default": 60
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        # Config file has plain integer (user edited manually or old version)
+        mock_sys.files["/var/lib/extensions-config/hibernate-after-sleep"] = "HibernateDelaySec=120"
+
+        result = await manager.get_config("hibernate-after-sleep")
+
+        assert result["values"]["HibernateDelaySec"] == 120
+
+    async def test_preserves_invalid_unit_format_as_string(self, manager, mock_sys, plugin_dir):
+        """Should preserve invalid formats (e.g., '1h' when expecting 'min') as strings."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "HibernateDelaySec",
+                        "type": "duration",
+                        "unit": "min",
+                        "default": 60
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        # User manually edited config with wrong unit format
+        mock_sys.files["/var/lib/extensions-config/hibernate-after-sleep"] = "HibernateDelaySec=1h"
+
+        result = await manager.get_config("hibernate-after-sleep")
+
+        # Should preserve as string since it doesn't match expected unit
+        assert result["values"]["HibernateDelaySec"] == "1h"
+
+    async def test_returns_defaults_when_config_missing(self, manager, mock_sys, plugin_dir):
+        """Should return default values when config file doesn't exist."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "HibernateDelaySec",
+                        "type": "duration",
+                        "unit": "min",
+                        "default": 60
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        # Config file does not exist
+        result = await manager.get_config("hibernate-after-sleep")
+
+        assert result["values"]["HibernateDelaySec"] == 60
+
+    async def test_handles_multiple_parameters_with_different_units(self, manager, mock_sys, plugin_dir):
+        """Should correctly parse multiple parameters with different units."""
+        mock_sys.add_manifest("hibernate-after-sleep", {
+            "id": "hibernate-after-sleep",
+            "name": "Hibernate After Sleep",
+            "config": {
+                "path": "/var/lib/extensions-config/hibernate-after-sleep",
+                "parameters": [
+                    {
+                        "id": "HibernateDelaySec",
+                        "type": "duration",
+                        "unit": "min",
+                        "default": 60
+                    },
+                    {
+                        "id": "TargetSwapFileSizeInGbs",
+                        "type": "integer",
+                        "unit": "GB",
+                        "default": 20
+                    }
+                ]
+            }
+        }, plugin_dir)
+
+        mock_sys.files["/var/lib/extensions-config/hibernate-after-sleep"] = (
+            "HibernateDelaySec=1440min\n"
+            "TargetSwapFileSizeInGbs=32GB"
+        )
+
+        result = await manager.get_config("hibernate-after-sleep")
+
+        assert result["values"]["HibernateDelaySec"] == 1440
+        assert result["values"]["TargetSwapFileSizeInGbs"] == 32
+
+
+@pytest.mark.asyncio
 class TestEnableLoader:
     """Tests for enabling the loader extension."""
 
@@ -223,7 +385,8 @@ class TestGetExtensions:
         }, plugin_dir)
         mock_sys.add_bundled_raw("loader", plugin_dir)
         mock_sys.add_installed_raw("loader")
-        # Note: NOT setting as active
+        # Enable sysext service but don't add extension to active list (pending reboot)
+        mock_sys.enabled_services.add("systemd-sysext")
 
         extensions = await manager.get_extensions()
 

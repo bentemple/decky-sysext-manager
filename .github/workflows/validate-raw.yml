@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Validate .raw files match source
+    name: Validate .raw files and run tests
     runs-on: ubuntu-latest
 
     steps:
@@ -20,3 +20,16 @@ jobs:
 
       - name: Validate .raw files match source
         run: ./scripts/validate-extensions.sh
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: .venv/bin/python -m pytest tests/ -v

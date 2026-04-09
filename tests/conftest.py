@@ -137,6 +137,10 @@ class MockSystemOps:
         self.disabled_services.add(service)
         return CommandResult(0, "", "")
 
+    def systemctl_is_active(self, service: str) -> bool:
+        """Check if a systemd service is active."""
+        return service in self.enabled_services
+
     def reboot(self) -> CommandResult:
         self.reboot_called = True
         self.commands_run.append(["sudo", "systemctl", "reboot"])
@@ -165,6 +169,9 @@ class MockSystemOps:
     def set_active_extensions(self, ext_names: List[str]) -> None:
         """Set which extensions appear as active in sysext list."""
         self._active_extensions = set(ext_names)
+        # Also enable systemd-sysext service when extensions are active
+        if ext_names:
+            self.enabled_services.add("systemd-sysext")
 
     def set_sysext_refresh_fails(self, fails: bool = True) -> None:
         """Configure whether sysext refresh succeeds or fails."""
@@ -172,7 +179,7 @@ class MockSystemOps:
 
     def add_uninstall_script(self, ext_id: str, plugin_dir: str = "/fake/plugin") -> None:
         """Add an uninstall script for an extension."""
-        script_path = f"{plugin_dir}/steamos-extension-{ext_id}/uninstall"
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-{ext_id}.uninstall"
         self.files[script_path] = "#!/bin/bash\necho uninstalling"
 
     # Assertion helpers
