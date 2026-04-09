@@ -56,6 +56,3 @@ uninstall:
     - id: resize_swapfile
       message: "Resize swapfile back to 1GB?"
       default: false
-    - id: remove_uninstaller
-      message: "Remove uninstall script from ~/.bin?"
-      default: false

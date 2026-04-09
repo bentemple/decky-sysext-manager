@@ -1,6 +1,6 @@
 #!/bin/bash
 # Non-interactive uninstall script for hibernate-after-sleep extension
-# Called by Decky plugin with CLI args: --resize_swapfile=true --remove_uninstaller=false
+# Called by Decky plugin with CLI args: --resize_swapfile=true
 set -e
 
 if [[ $EUID -ne 0 ]]; then
@@ -10,14 +10,11 @@ fi
 
 # Parse CLI arguments
 RESIZE_SWAPFILE=false
-REMOVE_UNINSTALLER=false
 
 for arg in "$@"; do
     case "$arg" in
         --resize_swapfile=true) RESIZE_SWAPFILE=true ;;
         --resize_swapfile=false) RESIZE_SWAPFILE=false ;;
-        --remove_uninstaller=true) REMOVE_UNINSTALLER=true ;;
-        --remove_uninstaller=false) REMOVE_UNINSTALLER=false ;;
     esac
 done
 
@@ -146,13 +143,6 @@ if [[ -f "$extension_file" ]]; then
     rm -f "$extension_file"
     systemd-sysext refresh 2>/dev/null || true
     echo "  Extension removed"
-fi
-
-if [[ "$REMOVE_UNINSTALLER" == "true" ]]; then
-    if [[ -f "/home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh" ]]; then
-        rm -f /home/deck/.bin/steamos-extension-hibernate-after-sleep-uninstall.sh
-        echo "  Removed uninstall script"
-    fi
 fi
 
 echo "Uninstall complete. Please reboot for all changes to take effect."

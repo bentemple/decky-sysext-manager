@@ -227,21 +227,6 @@ function enable_resume_services {
 	systemctl enable steamos-extension-hibernate-after-sleep-mark-boot-good.service 2>/dev/null || true
 }
 
-function install_uninstall_script {
-	local bin_dir="/home/deck/.bin"
-	local uninstall_source="/usr/sbin/steamos-extension-hibernate-after-sleep-uninstall"
-	local uninstall_dest="$bin_dir/steamos-extension-hibernate-after-sleep-uninstall"
-
-	mkdir -p "$bin_dir"
-	chown deck:deck "$bin_dir"
-
-	if [[ -f "$uninstall_source" ]]; then
-		cp "$uninstall_source" "$uninstall_dest"
-		chmod 755 "$uninstall_dest"
-		chown root:root "$uninstall_dest"
-	fi
-}
-
 function cleanup {
 	if [[ -f /tmp/.hibernate-after-sleep-readonly-disabled ]]; then
 		rm -f /tmp/.hibernate-after-sleep-readonly-disabled
@@ -265,5 +250,4 @@ ensure_logind_bypass
 enable_suspend_hibernate
 update_sleep_config
 enable_resume_services
-install_uninstall_script
 cleanup
