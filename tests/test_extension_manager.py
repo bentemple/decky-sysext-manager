@@ -136,6 +136,28 @@ class TestConfigureExtension:
         assert not result["success"]
         assert "not found" in result["error"].lower()
 
+    async def test_fails_when_configure_script_returns_error(self, manager, mock_sys, plugin_dir):
+        """Should fail when configure script exits with non-zero status."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "config": {
+                "path": "/var/lib/extensions-config/test-ext",
+                "parameters": [{"id": "param1", "type": "string"}]
+            }
+        }, plugin_dir)
+
+        configure_script = f"{plugin_dir}/dist/extensions/steamos-extension-test-ext.configure"
+        mock_sys.files[configure_script] = "#!/bin/bash\nexit 1"
+
+        # Mock command to return failure
+        mock_sys.command_outputs[f"{configure_script} --param1=value"] = ("", "Configuration failed: invalid value", 1)
+
+        result = await manager.configure_extension("test-ext", {"param1": "value"})
+
+        assert not result["success"]
+        assert "failed" in result["error"].lower()
+
 
 @pytest.mark.asyncio
 class TestConfigParsing:
@@ -579,3 +601,427 @@ class TestUpdateExtension:
 
         assert not result["success"]
         assert "not installed" in result["error"]
+
+
+@pytest.mark.asyncio
+class TestUpdateManagerGetCurrentVersion:
+    """Tests for update manager --get-current-version."""
+
+    async def test_runs_script_with_get_current_version_flag(self, manager, mock_sys, plugin_dir):
+        """Should run update-manager script with --get-current-version flag."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho 1.2.3"
+        mock_sys.make_executable(script_path)
+        mock_sys.command_outputs[f"{script_path} --get-current-version"] = ("1.2.3", "", 0)
+
+        result = await manager.run_update_manager("tailscale", "--get-current-version")
+
+        assert result["success"]
+        assert result["output"] == "1.2.3"
+        assert any("--get-current-version" in str(cmd) for cmd in mock_sys.commands_run)
+
+    async def test_fails_when_script_not_found(self, manager, mock_sys, plugin_dir):
+        """Should fail when update-manager script doesn't exist."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+        # Note: NOT adding the script file
+
+        result = await manager.run_update_manager("tailscale", "--get-current-version")
+
+        assert not result["success"]
+        assert "not found" in result["error"]
+
+    async def test_fails_when_manifest_missing(self, manager, mock_sys, plugin_dir):
+        """Should fail when extension manifest doesn't exist."""
+        result = await manager.run_update_manager("nonexistent", "--get-current-version")
+
+        assert not result["success"]
+        assert "not found" in result["error"]
+
+    async def test_fails_for_invalid_flag(self, manager, mock_sys, plugin_dir):
+        """Should reject invalid flags."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        result = await manager.run_update_manager("tailscale", "--invalid-flag")
+
+        assert not result["success"]
+        assert "Invalid flag" in result["error"]
+
+
+@pytest.mark.asyncio
+class TestUpdateManagerGetLatestVersion:
+    """Tests for update manager --get-latest-version with caching."""
+
+    async def test_runs_script_and_caches_result(self, manager, mock_sys, plugin_dir):
+        """Should run script and cache the result."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho 1.3.0"
+        mock_sys.make_executable(script_path)
+        mock_sys.command_outputs[f"{script_path} --get-latest-version"] = ("1.3.0", "", 0)
+
+        result = await manager.run_update_manager("tailscale", "--get-latest-version")
+
+        assert result["success"]
+        assert result["output"] == "1.3.0"
+
+        # Check cache was written
+        cache_file = f"{plugin_dir}/cache/update-manager/tailscale.json"
+        assert cache_file in mock_sys.files
+        import json
+        cache = json.loads(mock_sys.files[cache_file])
+        assert cache["version"] == "1.3.0"
+        assert "timestamp" in cache
+
+    async def test_uses_cached_version_when_fresh(self, manager, mock_sys, plugin_dir):
+        """Should return cached version without running script when cache is fresh."""
+        import json
+        import time
+
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        # Add the script (even though it won't be called)
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho 1.3.0"
+        mock_sys.make_executable(script_path)
+
+        # Add fresh cache (within 6 hour window)
+        cache_file = f"{plugin_dir}/cache/update-manager/tailscale.json"
+        mock_sys.files[cache_file] = json.dumps({
+            "timestamp": time.time() - 3600,  # 1 hour ago
+            "version": "1.3.0"
+        })
+
+        result = await manager.run_update_manager("tailscale", "--get-latest-version")
+
+        assert result["success"]
+        assert result["output"] == "1.3.0"
+        # Script should NOT have been called
+        assert not any("update-manager" in str(cmd) for cmd in mock_sys.commands_run)
+
+
+@pytest.mark.asyncio
+class TestUpdateManagerUpdate:
+    """Tests for update manager --update operation."""
+
+    async def test_runs_update_and_invalidates_cache(self, manager, mock_sys, plugin_dir):
+        """Should run update script and invalidate version cache."""
+        import json
+        import time
+
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho updated"
+        mock_sys.make_executable(script_path)
+        mock_sys.command_outputs[f"{script_path} --update"] = ("updated to 1.4.0", "", 0)
+
+        # Add cache that should be invalidated
+        cache_file = f"{plugin_dir}/cache/update-manager/tailscale.json"
+        mock_sys.files[cache_file] = json.dumps({
+            "timestamp": time.time(),
+            "version": "1.3.0"
+        })
+
+        result = await manager.run_update_manager("tailscale", "--update")
+
+        assert result["success"]
+        assert "update" in result["output"].lower()
+        # Cache should be removed
+        assert cache_file not in mock_sys.files
+
+
+@pytest.mark.asyncio
+class TestUpdateManagerErrorCases:
+    """Tests for update manager error handling."""
+
+    async def test_fails_when_script_returns_nonzero(self, manager, mock_sys, plugin_dir):
+        """Should fail when update-manager script exits with error."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\nexit 1"
+        mock_sys.make_executable(script_path)
+        mock_sys.command_outputs[f"{script_path} --get-current-version"] = ("", "Failed to get version", 1)
+
+        result = await manager.run_update_manager("tailscale", "--get-current-version")
+
+        assert not result["success"]
+        assert "error" in result
+        assert result["output"] == ""
+
+    async def test_handles_script_output_on_failure(self, manager, mock_sys, plugin_dir):
+        """Should return both output and error when script fails."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho 'partial output'\nexit 1"
+        mock_sys.make_executable(script_path)
+        mock_sys.command_outputs[f"{script_path} --update"] = ("partial output", "update failed: network error", 1)
+
+        result = await manager.run_update_manager("tailscale", "--update")
+
+        assert not result["success"]
+        assert result["output"] == "partial output"
+        assert "error" in result
+        assert "network error" in result["error"]
+
+    async def test_no_update_manager_configured(self, manager, mock_sys, plugin_dir):
+        """Should fail when extension has no update_manager section in manifest."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension"
+            # No update_manager section
+        }, plugin_dir)
+
+        result = await manager.run_update_manager("test-ext", "--get-current-version")
+
+        assert not result["success"]
+        assert "no update_manager configured" in result["error"]
+
+
+@pytest.mark.asyncio
+class TestHotReloadDisable:
+    """Tests for hot-reload activation mode during disable."""
+
+    async def test_hot_reload_success_no_reboot(self, manager, mock_sys, plugin_dir):
+        """Should hot-reload successfully and not require reboot."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "activation": {"mode": "hot-reload"}
+        }, plugin_dir)
+        mock_sys.add_installed_raw("test-ext")
+        mock_sys.sysext_refresh_success = True
+
+        result = await manager.disable_extension("test-ext")
+
+        assert result["success"]
+        assert not result["needs_reboot"]
+        assert mock_sys.sysext_refresh_called
+
+    async def test_hot_reload_fails_needs_reboot(self, manager, mock_sys, plugin_dir):
+        """Should require reboot when hot-reload fails."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "activation": {"mode": "auto"}
+        }, plugin_dir)
+        mock_sys.add_installed_raw("test-ext")
+        mock_sys.sysext_refresh_success = False
+
+        result = await manager.disable_extension("test-ext")
+
+        assert result["success"]
+        assert result["needs_reboot"]
+
+
+@pytest.mark.asyncio
+class TestHotReloadUpdate:
+    """Tests for hot-reload activation mode during update."""
+
+    async def test_hot_reload_update_no_reboot(self, manager, mock_sys, plugin_dir):
+        """Should hot-reload after update successfully."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension",
+            "activation": {"mode": "hot-reload"}
+        }, plugin_dir)
+        mock_sys.add_bundled_raw("test-ext", plugin_dir)
+        mock_sys.add_installed_raw("test-ext")
+        mock_sys.sysext_refresh_success = True
+
+        result = await manager.update_extension("test-ext")
+
+        assert result["success"]
+        assert not result["needs_reboot"]
+
+
+@pytest.mark.asyncio
+class TestStatusUnloaded:
+    """Tests for 'unloaded' status when sysext service is inactive."""
+
+    async def test_returns_unloaded_when_service_inactive(self, manager, mock_sys, plugin_dir):
+        """Should return 'unloaded' status when raw exists but sysext service is inactive."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension"
+        }, plugin_dir)
+        mock_sys.add_installed_raw("test-ext")
+        # Service is NOT active
+        mock_sys.enabled_services.discard("systemd-sysext")
+
+        extensions = await manager.get_extensions()
+
+        assert len(extensions) == 1
+        assert extensions[0]["status"] == "unloaded"
+        assert extensions[0]["enabled"]  # Still considered "enabled" since raw exists
+
+
+@pytest.mark.asyncio
+class TestSysextServiceManagement:
+    """Tests for systemd-sysext service management."""
+
+    async def test_get_sysext_status_active(self, manager, mock_sys, plugin_dir):
+        """Should return active status when service is running."""
+        mock_sys.enabled_services.add("systemd-sysext")
+
+        status = manager.get_sysext_status()
+
+        assert status["active"]
+        assert status["status"] == "active"
+
+    async def test_get_sysext_status_inactive(self, manager, mock_sys, plugin_dir):
+        """Should return inactive status when service is not running."""
+        mock_sys.enabled_services.discard("systemd-sysext")
+
+        status = manager.get_sysext_status()
+
+        assert not status["active"]
+        assert status["status"] == "inactive"
+
+    async def test_enable_sysext_success(self, manager, mock_sys, plugin_dir):
+        """Should enable systemd-sysext service successfully."""
+        result = await manager.enable_sysext()
+
+        assert result["success"]
+        assert "systemd-sysext" in mock_sys.enabled_services
+
+
+@pytest.mark.asyncio
+class TestGetExtensionStatus:
+    """Tests for get_extension_status (individual extension)."""
+
+    async def test_returns_enabled_when_raw_exists(self, manager, mock_sys, plugin_dir):
+        """Should return enabled=True when .raw file exists."""
+        mock_sys.add_installed_raw("test-ext")
+
+        status = await manager.get_extension_status("test-ext")
+
+        assert status["enabled"]
+        assert status["raw_file"] == "steamos-extension-test-ext.raw"
+
+    async def test_returns_disabled_when_raw_missing(self, manager, mock_sys, plugin_dir):
+        """Should return enabled=False when .raw file doesn't exist."""
+        status = await manager.get_extension_status("test-ext")
+
+        assert not status["enabled"]
+
+
+@pytest.mark.asyncio
+class TestGetExtensionsDetails:
+    """Tests for additional details in get_extensions."""
+
+    async def test_detects_update_manager_availability(self, manager, mock_sys, plugin_dir):
+        """Should set has_update_manager=True when script exists and is executable."""
+        mock_sys.add_manifest("tailscale", {
+            "id": "tailscale",
+            "name": "Tailscale",
+            "update_manager": {"script": "./update-manager"}
+        }, plugin_dir)
+
+        script_path = f"{plugin_dir}/dist/extensions/steamos-extension-tailscale.update-manager"
+        mock_sys.files[script_path] = "#!/bin/bash\necho test"
+        mock_sys.make_executable(script_path)
+
+        extensions = await manager.get_extensions()
+
+        assert len(extensions) == 1
+        assert extensions[0]["has_update_manager"]
+
+    async def test_detects_bundled_update_available(self, manager, mock_sys, plugin_dir):
+        """Should set bundled_update_available=True when hashes differ."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension"
+        }, plugin_dir)
+
+        bundled_raw = f"{plugin_dir}/dist/extensions/steamos-extension-test-ext.raw"
+        installed_raw = f"{EXTENSIONS_DIR}/steamos-extension-test-ext.raw"
+
+        mock_sys.binary_files[bundled_raw] = b"new content"
+        mock_sys.binary_files[installed_raw] = b"old content"
+
+        extensions = await manager.get_extensions()
+
+        assert len(extensions) == 1
+        assert extensions[0]["bundled_update_available"]
+
+    async def test_includes_readme_content(self, manager, mock_sys, plugin_dir):
+        """Should include README content when available."""
+        mock_sys.add_manifest("test-ext", {
+            "id": "test-ext",
+            "name": "Test Extension"
+        }, plugin_dir)
+
+        readme_path = f"{plugin_dir}/dist/extensions/steamos-extension-test-ext.readme"
+        mock_sys.files[readme_path] = "# Test Extension\n\nThis is a test."
+
+        extensions = await manager.get_extensions()
+
+        assert len(extensions) == 1
+        assert "Test Extension" in extensions[0]["readme"]
+
+
+@pytest.mark.asyncio
+class TestDisableWithPromptAnswers:
+    """Tests for passing prompt answers to uninstall script."""
+
+    async def test_passes_prompt_answers_to_uninstall_script(self, manager, mock_sys, plugin_dir):
+        """Should pass prompt answers as --key=value arguments to uninstall script."""
+        mock_sys.add_manifest("hibernate", {
+            "id": "hibernate",
+            "name": "Hibernate After Sleep",
+            "activation": {"mode": "reboot"},
+            "uninstall": {
+                "prompts": [
+                    {"id": "resize_swapfile", "message": "Resize swapfile?", "default": False}
+                ]
+            }
+        }, plugin_dir)
+        mock_sys.add_installed_raw("hibernate")
+
+        uninstall_path = f"{plugin_dir}/dist/extensions/steamos-extension-hibernate.uninstall"
+        mock_sys.files[uninstall_path] = "#!/bin/bash\necho uninstalling"
+
+        await manager.disable_extension("hibernate", prompt_answers={"resize_swapfile": True})
+
+        # Check that the prompt answer was passed as an argument
+        uninstall_calls = [cmd for cmd in mock_sys.commands_run if "uninstall" in str(cmd)]
+        assert len(uninstall_calls) > 0
+        # The command should include --resize_swapfile=true
+        assert any("--resize_swapfile=true" in str(cmd) for cmd in uninstall_calls)

@@ -25,9 +25,11 @@ class MockSystemOps:
         self.files: Dict[str, str] = {}  # path -> content
         self.binary_files: Dict[str, bytes] = {}  # path -> bytes
         self.dirs: set = set()
+        self.executable_files: set = set()  # Explicitly track executable files
 
         # Command tracking
         self.commands_run: List[List[str]] = []
+        self.command_outputs: Dict[str, tuple] = {}  # "cmd args" -> (stdout, stderr, returncode)
         self.enabled_services: set = set()
         self.disabled_services: set = set()
 
@@ -39,6 +41,21 @@ class MockSystemOps:
         self.reboot_called = False
         self.files_removed: List[str] = []
         self.files_copied: List[tuple] = []  # (src, dest)
+
+    @property
+    def sysext_refresh_success(self) -> bool:
+        """Get sysext refresh success state."""
+        return self._sysext_refresh_succeeds
+
+    @sysext_refresh_success.setter
+    def sysext_refresh_success(self, value: bool) -> None:
+        """Set sysext refresh success state."""
+        self._sysext_refresh_succeeds = value
+
+    @property
+    def sysext_refresh_called(self) -> bool:
+        """Check if sysext refresh was called."""
+        return any("systemd-sysext" in str(cmd) and "refresh" in str(cmd) for cmd in self.commands_run)
 
     # File operations
 
@@ -105,12 +122,21 @@ class MockSystemOps:
         return f"hash_{hash(content)}"
 
     def is_executable(self, path: str) -> bool:
-        return self.file_exists(path)
+        return path in self.executable_files
+
+    def make_executable(self, path: str) -> None:
+        """Mark a file as executable."""
+        self.executable_files.add(path)
 
     # Process/command operations
 
     def run_command(self, args: List[str], timeout: int = 30) -> CommandResult:
         self.commands_run.append(args)
+        # Check if we have a mock output for this command
+        cmd_str = " ".join(args)
+        if cmd_str in self.command_outputs:
+            stdout, stderr, returncode = self.command_outputs[cmd_str]
+            return CommandResult(returncode, stdout, stderr)
         return CommandResult(0, "", "")
 
     def sysext_list(self) -> CommandResult:
