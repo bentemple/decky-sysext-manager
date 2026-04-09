@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+SRC_DIR="$ROOT_DIR/src"
 ASSETS_DIR="$ROOT_DIR/assets/extensions"
 
 echo "Validating checked-in .raw files against source..."
@@ -13,7 +14,7 @@ echo ""
 
 FAILED=0
 
-for ext_dir in "$ROOT_DIR"/steamos-extension-*/; do
+for ext_dir in "$SRC_DIR"/steamos-extension-*/; do
     ext_name=$(basename "$ext_dir")
     raw_file="$ASSETS_DIR/$ext_name.raw"
     source_dir="$ext_dir/overlayfs"
