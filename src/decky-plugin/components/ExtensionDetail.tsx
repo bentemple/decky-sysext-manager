@@ -398,13 +398,14 @@ export function ExtensionDetail({
           body: result.needs_reboot ? "Extension updated. Reboot required." : "Extension updated.",
         });
         onUpdateComplete?.(manifest.id);
+        await refreshExtension();
       } else {
         showToast({ title: "Update Failed", body: result.error || "Unknown error" });
       }
     } finally {
       setUpdatingExt(false);
     }
-  }, [manifest.id, manifest.name, onUpdateExt, onUpdateComplete]);
+  }, [manifest.id, manifest.name, onUpdateExt, onUpdateComplete, refreshExtension]);
 
   const handleBack = useCallback(() => {
     if (isDirty) {
