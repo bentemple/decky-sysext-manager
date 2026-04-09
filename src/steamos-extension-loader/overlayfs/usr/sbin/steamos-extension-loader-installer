@@ -8,7 +8,7 @@ function same {
 
 # Read persistence config (default: true for backwards compatibility)
 ENABLE_PERSISTENCE=true
-CONFIG_FILE="/var/lib/extensions-config/loader/config"
+CONFIG_FILE="/var/lib/extensions-config/loader"
 if [[ -f "$CONFIG_FILE" ]]; then
 	while IFS='=' read -r key value; do
 		[[ "$key" == "enable_persistence" ]] && ENABLE_PERSISTENCE="$value"

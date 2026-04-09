@@ -10,7 +10,7 @@ activation:
   mode: reboot
 
 config:
-  path: /var/lib/extensions-config/loader/config
+  path: /var/lib/extensions-config/loader
   parameters:
     - id: enable_persistence
       type: boolean
