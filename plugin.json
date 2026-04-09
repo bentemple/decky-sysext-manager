@@ -1,11 +1,11 @@
 {
-  "name": "Sysext Extensions",
+  "name": "Sysext Manager",
   "author": "ben.temple",
   "flags": ["root", "debug"],
   "api_version": 1,
   "publish": {
     "tags": ["system", "extensions", "power", "performance"],
     "description": "Manage SteamOS systemd-sysext extensions for power, performance, and utilities",
-    "image": "TODO"
+    "image": "https://raw.githubusercontent.com/bentemple/decky-download-all/main/assets/preview.png"
   }
 }

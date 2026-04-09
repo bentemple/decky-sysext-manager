@@ -1,4 +1,4 @@
-name: Build and Release Extensions
+name: Build and Release
 
 on:
   push:
@@ -10,32 +10,33 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build:
+    name: Build plugin
+    uses: ./.github/workflows/build-plugin.yml
+
+  release:
+    name: Create GitHub Release
+    needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: ./artifacts
 
-      - name: Install dependencies
+      - name: List downloaded files
         run: |
-          sudo apt-get update
-          sudo apt-get install -y squashfs-tools rsync zsh curl
+          echo "Plugin zip (includes all .raw files):"
+          ls -lh ./artifacts/
 
-      - name: Build extensions
-        run: |
-          chmod +x ./build-extension-images.sh
-          ./build-extension-images.sh
-
-      - name: List built files
-        run: ls -lh ./build/
-
-      - name: Create Release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
-          files: build/*.raw
+          files: ./artifacts/*.zip
           generate_release_notes: true
-          draft: false
+          draft: true
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
