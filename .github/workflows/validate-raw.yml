@@ -3,18 +3,8 @@ name: Validate Raw Files
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/steamos-extension-*/**'
-      - 'assets/extensions/**'
-      - 'scripts/validate-extensions.sh'
-      - '.github/workflows/validate-raw.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'src/steamos-extension-*/**'
-      - 'assets/extensions/**'
-      - 'scripts/validate-extensions.sh'
-      - '.github/workflows/validate-raw.yml'
 
 jobs:
   validate:
