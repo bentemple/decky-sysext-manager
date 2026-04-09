@@ -25,7 +25,7 @@ interface AboutPageProps {
 
 export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps) {
   const handleUninstallAll = useCallback(async () => {
-    const { closeModal: closeOuterModal } = showModal(
+    const { Close: closeOuterModal } = showModal(
       <ConfirmModal
         strTitle="Uninstall All Extensions"
         strDescription="This will uninstall all extensions and reboot your Steam Deck. Are you sure?"
@@ -40,18 +40,18 @@ export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps
           const uninstallOne = async (ext: Extension): Promise<void> => {
             return new Promise((resolve) => {
               if (ext.manifest.uninstall?.prompts?.length) {
-                const { closeModal } = showModal(
+                const { Close } = showModal(
                   <UninstallDialog
                     extensionName={ext.manifest.name}
                     prompts={ext.manifest.uninstall.prompts}
                     onConfirm={async (answers) => {
                       await disable(ext.manifest.id, answers);
                       resolve();
-                      closeModal();
+                      Close();
                     }}
                     onCancel={() => {
                       resolve();
-                      closeModal();
+                      Close();
                     }}
                   />
                 );

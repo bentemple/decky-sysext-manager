@@ -290,7 +290,7 @@ function ExtensionListPage({
         }
       } else {
         if (ext.manifest.uninstall?.prompts?.length) {
-          const { closeModal } = showModal(
+          const { Close } = showModal(
             <UninstallDialog
               extensionName={ext.manifest.name}
               prompts={ext.manifest.uninstall.prompts}
@@ -303,10 +303,10 @@ function ExtensionListPage({
                     body: "Reboot required",
                   });
                 }
-                closeModal();
+                Close();
               }}
               onCancel={() => {
-                closeModal();
+                Close();
               }}
             />
           );

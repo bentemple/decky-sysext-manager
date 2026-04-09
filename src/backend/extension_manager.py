@@ -372,10 +372,12 @@ class ExtensionManager:
                     defaults[param["id"]] = param.get("default")
                 return {"values": defaults}
 
-            # Build a map of parameter types
+            # Build a map of parameter types and units
             param_types = {}
+            param_units = {}
             for param in config_section.get("parameters", []):
                 param_types[param["id"]] = param.get("type", "string")
+                param_units[param["id"]] = param.get("unit", "")
 
             # Parse config file (key=value format)
             values = {}
@@ -394,7 +396,14 @@ class ExtensionManager:
                         values[key] = value.lower() in ("true", "1", "yes")
                     elif param_type in ("integer", "duration"):
                         try:
-                            values[key] = int(value)
+                            # For duration/integer types, strip unit suffix before parsing
+                            # e.g. "60min" -> 60, "20GB" -> 20
+                            unit = param_units.get(key, "")
+                            if unit and value.endswith(unit):
+                                numeric_value = value[:-len(unit)].strip()
+                                values[key] = int(numeric_value)
+                            else:
+                                values[key] = int(value)
                         except ValueError:
                             values[key] = value
                     else:
