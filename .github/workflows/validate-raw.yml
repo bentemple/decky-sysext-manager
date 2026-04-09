@@ -4,14 +4,14 @@ on:
   push:
     branches: [main]
     paths:
-      - 'steamos-extension-*/**'
+      - 'src/steamos-extension-*/**'
       - 'assets/extensions/**'
       - 'scripts/validate-extensions.sh'
       - '.github/workflows/validate-raw.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'steamos-extension-*/**'
+      - 'src/steamos-extension-*/**'
       - 'assets/extensions/**'
       - 'scripts/validate-extensions.sh'
       - '.github/workflows/validate-raw.yml'
