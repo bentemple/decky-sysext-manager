@@ -16,3 +16,8 @@ remove_from_file "$HOME/.bashrc"
 remove_from_file "$HOME/.zshrc"
 
 echo "Tailscale PATH removed from shell configs."
+
+if [[ -f /usr/sbin/steamos-extension-tailscale-uninstall ]]; then
+    sudo sh /usr/sbin/steamos-extension-tailscale-uninstall
+    echo "Tailscale Uninstall Script Invoked."
+fi
