@@ -4,7 +4,7 @@
   "description": "Decky plugin to manage SteamOS systemd-sysext extensions",
   "type": "module",
   "scripts": {
-    "build": "rollup -c && ./scripts/bundle-extensions.sh",
+    "build": "rollup -c && sh scripts/bundle-extensions.sh",
     "watch": "rollup -c -w",
     "clean": "rm -rf dist/ py_modules/backend/",
     "rebuild-extension-images": "rm -rf assets/extensions/*.raw && ./build-extension-images.sh",
