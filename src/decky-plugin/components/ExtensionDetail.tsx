@@ -11,20 +11,22 @@ function useInputAwareFocus(containerRef: React.RefObject<HTMLElement | null>) {
     const container = containerRef.current;
     if (!container) return;
 
-    // When user touches/clicks an interactive element, focus it immediately if it's not already focused
+    // When user touches an interactive element, focus it immediately if it's not already focused
     const handlePointerDown = (e: PointerEvent) => {
+      // Only handle touch inputs, not mouse or pen
+      if (e.pointerType !== 'touch') return;
+
       const target = e.target as HTMLElement;
 
-      // Check if we're directly interacting with an interactive element
-      const isInteractive =
-        target.tagName === 'INPUT' ||  // Sliders, text inputs
-        target.tagName === 'BUTTON' || // Buttons
-        (target as HTMLInputElement).type === 'range' ||     // Range sliders specifically
-        target.closest('button') ||    // Inside a button
-        target.classList.contains('gamepaddialog_Toggle_24aLH') || // Toggle switches
-        (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox'); // Checkboxes/toggles
+      // Check if we're directly interacting with button, slider, sliderField, or toggle
+      const isTargetElement =
+        target.tagName === 'BUTTON' ||
+        target.closest('button') ||
+        (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'range') ||
+        target.classList.contains('gamepaddialog_Toggle_24aLH') ||
+        (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox');
 
-      if (!isInteractive) return;
+      if (!isTargetElement) return; // Let other touch inputs continue normally
 
       // Find the focusable ancestor (Field, Focusable, ButtonItem, etc.)
       let focusableElement: HTMLElement | null = target;
@@ -887,20 +889,25 @@ export function ExtensionDetail({
           </Focusable>
 
           {/* README Content Sections */}
-          {parseReadme(readme).map((section, index) => (
-            <Field
-              key={`readme-${index}`}
-              focusable={true}
-              label={section.title ? (
-                <span style={{
-                  fontSize: section.level === 1 ? 16 : section.level === 2 ? 14 : 13,
-                  fontWeight: "bold",
-                }}>
-                  {section.title}
-                </span>
-              ) : undefined}
-              bottomSeparator={section.title ? undefined : "none"}
-              description={
+          {parseReadme(readme).map((section, index, sections) => {
+            // Check if the next section is a continuation (no title) of this section
+            const nextSection = sections[index + 1];
+            const isBeforeContinuation = nextSection && !nextSection.title;
+
+            return (
+              <Field
+                key={`readme-${index}`}
+                focusable={true}
+                label={section.title ? (
+                  <span style={{
+                    fontSize: section.level === 1 ? 16 : section.level === 2 ? 14 : 13,
+                    fontWeight: "bold",
+                  }}>
+                    {section.title}
+                  </span>
+                ) : undefined}
+                bottomSeparator={isBeforeContinuation ? "none" : undefined}
+                description={
                 <div
                   style={{
                     color: "#bdc3c7",
@@ -914,7 +921,8 @@ export function ExtensionDetail({
                 </div>
               }
             />
-          ))}
+            );
+          })}
         </>
       )}
       </DialogControlsSection>
