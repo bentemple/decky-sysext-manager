@@ -1,6 +1,6 @@
 {
   "name": "sysext-manager",
-  "version": "1.0.0",
+  "version": "0.8.0",
   "description": "Decky plugin to manage SteamOS systemd-sysext extensions",
   "type": "module",
   "scripts": {

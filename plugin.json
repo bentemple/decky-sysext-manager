@@ -1,7 +1,7 @@
 {
   "name": "Sysext Manager",
   "author": "ben.temple",
-  "flags": ["root", "debug"],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["system", "extensions", "power", "performance"],
