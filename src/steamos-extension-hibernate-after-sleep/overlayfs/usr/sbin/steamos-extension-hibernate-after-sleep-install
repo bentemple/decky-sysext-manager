@@ -33,6 +33,40 @@ function get_swapfile_path {
 	fi
 }
 
+function check_swap_space_available {
+	local swapfile_path=$(get_swapfile_path)
+	local swapfile_dir=$(dirname "$swapfile_path")
+	local required_gb=$TargetSwapFileSizeInGbs
+
+	# Get available space in KB and convert to GB
+	local available_kb=$(df --output=avail "$swapfile_dir" | tail -1)
+	local available_gb=$((available_kb / 1024 / 1024))
+
+	# Get existing swap file size if it exists
+	local existing_swap_gb=0
+	if [[ -f "$swapfile_path" ]]; then
+		local existing_bytes=$(stat -c %s "$swapfile_path" 2>/dev/null || echo 0)
+		existing_swap_gb=$((existing_bytes / 1024 / 1024 / 1024))
+	fi
+
+	# Total space = available + space that will be freed from existing swap
+	local total_available_gb=$((available_gb + existing_swap_gb))
+
+	if [[ $total_available_gb -lt $required_gb ]]; then
+		echo "Error: Insufficient disk space for ${required_gb}GB swap file." >&2
+		echo "  Available: ${available_gb}GB" >&2
+		if [[ $existing_swap_gb -gt 0 ]]; then
+			echo "  Existing swap: ${existing_swap_gb}GB (will be freed)" >&2
+			echo "  Total available: ${total_available_gb}GB" >&2
+		fi
+		echo "  Required: ${required_gb}GB" >&2
+		echo "  Additional space needed: $((required_gb - total_available_gb))GB" >&2
+		return 1
+	fi
+
+	return 0
+}
+
 function setup_swapfile_btrfs {
 	local swapfile_path="/home/@swapfile/swapfile"
 	local target_size="${TargetSwapFileSizeInGbs}G"
@@ -244,6 +278,12 @@ if [[ "$1" == "--force" ]]; then
 fi
 
 load_config
+
+# Validate disk space before attempting to setup swap
+if ! check_swap_space_available; then
+	exit 1
+fi
+
 setup_swapfile
 update_grub_resume
 ensure_logind_bypass
