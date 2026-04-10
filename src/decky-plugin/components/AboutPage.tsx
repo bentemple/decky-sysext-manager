@@ -82,10 +82,24 @@ export function AboutPage({ extensions, disable, triggerReboot }: AboutPageProps
   return (
     <DialogBody>
       <DialogControlsSection>
+        {/* Disclaimer Section */}
+        <Focusable
+          // @ts-ignore
+          focusableIfNoChildren={true}
+        >
+          <span style={{ fontSize: "1.2em", color: "#e74c3c" }}>⚠️ Disclaimer</span>
+          <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #e74c3c, #c0392b)", marginTop: 4 }} />
+        </Focusable>
+        <Field
+          focusable={true}
+          description="I provide no warranties for this code. Modifying your Steam Deck's software could potentially make your device unbootable. Typically this is recoverable from a bootable USB drive, but proceed at your own risk."
+        />
+
         {/* About Section */}
         <Focusable
           // @ts-ignore
           focusableIfNoChildren={true}
+          style={{ marginTop: 16 }}
         >
           <span style={{ fontSize: "1.2em" }}>About SteamOS Sysext Extensions</span>
           <div style={{ width: "100%", height: "1px", background: "linear-gradient(to right, #00ccff, #3366ff)", marginTop: 4 }} />

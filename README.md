@@ -20,7 +20,21 @@ Some extensions include or download third-party software:
 | `steamos-extension-irqbalance` | [irqbalance](https://github.com/Irqbalance/irqbalance) | GPL-2.0 | Statically compiled binary |
 | `steamos-extension-preload` | [preload](https://sourceforge.net/projects/preload/) | GPL-2.0 | Statically compiled binary |
 
-## Quick Start
+## Screenshots
 
-TODO
+### Quick Access Menu
+![Quick Access Menu](assets/quick-access-menu.png)
+
+### Enabled Plugins
+![Enabled Plugins](assets/enabled-plugins.png)
+
+### Experimental Extensions
+![Experimental Extensions](assets/experimental.png)
+
+### Hibernate After Sleep Configuration
+![Hibernate After Sleep Settings](assets/hibernate-after-sleep-settings.png)
+![Hibernate After Sleep Detailed Settings](assets/hibernate-after-sleep-detailed-settings.png)
+
+### Tailscale Configuration
+![Tailscale Settings](assets/tailscale-settings.png)
 

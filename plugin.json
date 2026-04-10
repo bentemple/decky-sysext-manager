@@ -6,6 +6,6 @@
   "publish": {
     "tags": ["system", "extensions", "power", "performance"],
     "description": "Manage SteamOS systemd-sysext extensions for power, performance, and utilities",
-    "image": "https://raw.githubusercontent.com/bentemple/decky-download-all/main/assets/preview.png"
+    "image": "https://raw.githubusercontent.com/bentemple/decky-sysext-manager/main/assets/enabled-plugins.png"
   }
 }
