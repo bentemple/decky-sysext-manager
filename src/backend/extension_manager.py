@@ -365,8 +365,10 @@ class ExtensionManager:
                 return {"values": {}}
 
             config_path = config_section.get("path")
+            self._log("info", f"[get_config] {ext_id}: config_path={config_path}, exists={self.sys.file_exists(config_path) if config_path else False}")
             if not config_path or not self.sys.file_exists(config_path):
                 # Return defaults from manifest
+                self._log("info", f"[get_config] {ext_id}: Config file not found, returning defaults")
                 defaults = {}
                 for param in config_section.get("parameters", []):
                     defaults[param["id"]] = param.get("default")
@@ -382,6 +384,7 @@ class ExtensionManager:
             # Parse config file (key=value format)
             values = {}
             config_content = self.sys.read_file(config_path)
+            self._log("info", f"[get_config] {ext_id}: Reading config file, content length={len(config_content)}")
             for line in config_content.split("\n"):
                 line = line.strip()
                 if not line or line.startswith("#"):
@@ -402,8 +405,10 @@ class ExtensionManager:
                             if unit and value.endswith(unit):
                                 numeric_value = value[:-len(unit)].strip()
                                 values[key] = int(numeric_value)
+                                self._log("info", f"[get_config] {ext_id}: Parsed {key}={value} -> {values[key]} (stripped unit '{unit}')")
                             else:
                                 values[key] = int(value)
+                                self._log("info", f"[get_config] {ext_id}: Parsed {key}={value} -> {values[key]}")
                         except ValueError:
                             values[key] = value
                     else:

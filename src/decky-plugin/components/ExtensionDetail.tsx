@@ -1,8 +1,57 @@
-import { DialogBody, DialogControlsSection, Field, ToggleField, Focusable, ButtonItem, showModal, ConfirmModal } from "@decky/ui";
+import { DialogBody, DialogControlsSection, Field, ToggleField, Focusable, ButtonItem, showModal, ConfirmModal, SliderField } from "@decky/ui";
 import { FaChevronLeft, FaTimes, FaUpload } from "react-icons/fa";
-import { Extension, ExtensionStatus, ConfigParameter, ConfigParameterSegment, ExtensionConfig, UpdateInfo } from "../types/manifest";
+import { Extension, ExtensionStatus, ConfigParameter, ExtensionConfig, UpdateInfo } from "../types/manifest";
 import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
 import { showToast } from "../utils/toast";
+import { Logger } from "../utils/logger";
+
+// Custom hook to proactively focus elements on touch/mouse to prevent scroll jumps
+function useInputAwareFocus(containerRef: React.RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // When user touches/clicks an interactive element, focus it immediately if it's not already focused
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Check if we're directly interacting with an interactive element
+      const isInteractive =
+        target.tagName === 'INPUT' ||  // Sliders, text inputs
+        target.tagName === 'BUTTON' || // Buttons
+        (target as HTMLInputElement).type === 'range' ||     // Range sliders specifically
+        target.closest('button') ||    // Inside a button
+        target.classList.contains('gamepaddialog_Toggle_24aLH') || // Toggle switches
+        (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox'); // Checkboxes/toggles
+
+      if (!isInteractive) return;
+
+      // Find the focusable ancestor (Field, Focusable, ButtonItem, etc.)
+      let focusableElement: HTMLElement | null = target;
+      while (focusableElement && focusableElement !== container) {
+        if (
+          focusableElement.hasAttribute('tabindex') ||
+          focusableElement.classList.contains('gamepaddialog_Field_S-5XY') || // Decky Field
+          focusableElement.classList.contains('gamepaddialog_Focusable_1-LxQ') // Decky Focusable
+        ) {
+          // Check if this element is not currently focused
+          if (document.activeElement !== focusableElement) {
+            // Focus it with preventScroll to avoid the jump
+            focusableElement.focus({ preventScroll: true });
+          }
+          break;
+        }
+        focusableElement = focusableElement.parentElement;
+      }
+    };
+
+    container.addEventListener('pointerdown', handlePointerDown, { capture: true });
+
+    return () => {
+      container.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+    };
+  }, [containerRef]);
+}
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
@@ -35,34 +84,71 @@ function StatusBadge({ status }: { status: ExtensionStatus }) {
   );
 }
 
-// Convert a real value to a 0–100 slider position using segments
-function realToSlider(value: number, segments: ConfigParameterSegment[]): number {
-  let sliderOffset = 0;
-  for (const seg of segments) {
-    if (value <= seg.to) {
-      const segFraction = (value - seg.from) / (seg.to - seg.from);
-      return sliderOffset + segFraction * seg.width;
-    }
-    sliderOffset += seg.width;
-  }
-  return 100;
+// Parse README into sections and break long sections into chunks
+interface ReadmeSection {
+  title?: string;
+  content: string;
+  level: number; // 1 for #, 2 for ##, 3 for ###
 }
 
-// Convert a 0–100 slider position to a snapped real value using segments
-function sliderToReal(slider: number, segments: ConfigParameterSegment[]): number {
-  let sliderOffset = 0;
-  for (const seg of segments) {
-    const segEnd = sliderOffset + seg.width;
-    if (slider <= segEnd || seg === segments[segments.length - 1]) {
-      const segFraction = Math.max(0, slider - sliderOffset) / seg.width;
-      const rawValue = seg.from + segFraction * (seg.to - seg.from);
-      // Snap to step
-      const snapped = Math.round((rawValue - seg.from) / seg.step) * seg.step + seg.from;
-      return Math.max(seg.from, Math.min(seg.to, snapped));
+function parseReadme(readme: string): ReadmeSection[] {
+  const lines = readme.split('\n');
+  const sections: ReadmeSection[] = [];
+  let currentSection: ReadmeSection | null = null;
+  const MAX_LINES_PER_CHUNK = 10; // Roughly half screen height
+
+  for (const line of lines) {
+    // Check for headers
+    const h1Match = line.match(/^#\s+(.+)$/);
+    const h2Match = line.match(/^##\s+(.+)$/);
+    const h3Match = line.match(/^###\s+(.+)$/);
+
+    if (h1Match || h2Match || h3Match) {
+      // Save previous section if exists
+      if (currentSection) {
+        sections.push(currentSection);
+      }
+      // Start new section
+      currentSection = {
+        title: h1Match?.[1] || h2Match?.[1] || h3Match?.[1],
+        content: '',
+        level: h1Match ? 1 : h2Match ? 2 : 3,
+      };
+    } else {
+      // Add line to current section
+      if (!currentSection) {
+        // No header yet, create a default section
+        currentSection = { content: '', level: 0 };
+      }
+      currentSection.content += (currentSection.content ? '\n' : '') + line;
     }
-    sliderOffset += seg.width;
   }
-  return segments[segments.length - 1].to;
+
+  // Push last section
+  if (currentSection) {
+    sections.push(currentSection);
+  }
+
+  // Break long sections into chunks
+  const chunkedSections: ReadmeSection[] = [];
+  for (const section of sections) {
+    const contentLines = section.content.split('\n');
+    if (contentLines.length <= MAX_LINES_PER_CHUNK) {
+      chunkedSections.push(section);
+    } else {
+      // Split into chunks
+      for (let i = 0; i < contentLines.length; i += MAX_LINES_PER_CHUNK) {
+        const chunk = contentLines.slice(i, i + MAX_LINES_PER_CHUNK).join('\n');
+        chunkedSections.push({
+          title: i === 0 ? section.title : undefined, // Only first chunk gets title
+          content: chunk,
+          level: section.level,
+        });
+      }
+    }
+  }
+
+  return chunkedSections;
 }
 
 // Format a minute value as a human-readable string
@@ -83,12 +169,22 @@ function ConfigField({
   param,
   value,
   onChange,
+  logger,
 }: {
   param: ConfigParameter;
   value: string | number | boolean;
   onChange: (id: string, value: string | number | boolean) => void;
+  logger: Logger;
 }) {
   const displayValue = value !== undefined && value !== null ? value : param.default;
+
+  const logUI = async (message: string) => {
+    try {
+      await logger.info(message);
+    } catch (e) {
+      console.error("Failed to log:", e);
+    }
+  };
 
   if (param.type === "boolean") {
     return (
@@ -106,92 +202,120 @@ function ConfigField({
     const unit = param.unit ? ` ${param.unit}` : "";
 
     if (param.segments?.length) {
-      const sliderVal = realToSlider(numVal, param.segments);
-      const displayLabel = param.type === "duration" && param.unit === "min"
-        ? formatMinutes(numVal)
-        : `${numVal}${unit}`;
+      // Segmented slider: translate between real value and 0-100 slider position
+
+      logUI(`[${param.id}] Loading segmented slider - displayValue: ${displayValue}, numVal: ${numVal}, default: ${param.default}`);
+
+      // Convert real value to slider position (0-100)
+      const realToSlider = (real: number): number => {
+        let sliderOffset = 0;
+        for (const seg of param.segments!) {
+          if (real <= seg.to) {
+            const segFraction = (real - seg.from) / (seg.to - seg.from);
+            return sliderOffset + segFraction * seg.width;
+          }
+          sliderOffset += seg.width;
+        }
+        return 100;
+      };
+
+      // Convert slider position (0-100) to real value
+      const sliderToReal = (slider: number): number => {
+        let sliderOffset = 0;
+        for (const seg of param.segments!) {
+          const segEnd = sliderOffset + seg.width;
+          if (slider <= segEnd || seg === param.segments![param.segments!.length - 1]) {
+            const segFraction = Math.max(0, slider - sliderOffset) / seg.width;
+            const rawValue = seg.from + segFraction * (seg.to - seg.from);
+            // Snap to step
+            const snapped = Math.round((rawValue - seg.from) / seg.step) * seg.step + seg.from;
+            return Math.max(seg.from, Math.min(seg.to, snapped));
+          }
+          sliderOffset += seg.width;
+        }
+        return param.segments![param.segments!.length - 1].to;
+      };
+
+      const sliderValue = realToSlider(numVal);
+      logUI(`[${param.id}] numVal: ${numVal}, sliderValue: ${sliderValue}, segments: ${JSON.stringify(param.segments)}`);
+      const formatValue = (val: number) =>
+        param.type === "duration" && param.unit === "min"
+          ? formatMinutes(val)
+          : `${val}${unit}`;
+
+      // Create notches evenly distributed across 0-100, then translate to real values
+      const notchCountValue = param.notchCount ?? (param.segments.length + 1);
+      const notchLabels = [];
+
+      for (let i = 0; i < notchCountValue; i++) {
+        const sliderPos = (i / (notchCountValue - 1)) * 100;
+        const realValue = sliderToReal(sliderPos);
+        notchLabels.push({
+          notchIndex: i,
+          label: formatValue(realValue),
+          value: realValue,
+        });
+      }
 
       return (
-        <Field
-          focusable={true}
-          label={param.label}
-          description={
-            <div style={{ width: "100%" }}>
-              {param.description && (
-                <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
-                  {param.description}
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
-                  {displayLabel}
-                </span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={0.01}
-                value={sliderVal}
-                onChange={(e) => {
-                  const real = sliderToReal(Number(e.target.value), param.segments!);
-                  onChange(param.id, real);
-                }}
-                style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
-              />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-                <span style={{ color: "#8b929a", fontSize: 10 }}>
-                  {param.type === "duration" && param.unit === "min"
-                    ? formatMinutes(param.segments[0].from)
-                    : `${param.segments[0].from}${unit}`}
-                </span>
-                <span style={{ color: "#8b929a", fontSize: 10 }}>
-                  {param.type === "duration" && param.unit === "min"
-                    ? formatMinutes(param.segments[param.segments.length - 1].to)
-                    : `${param.segments[param.segments.length - 1].to}${unit}`}
-                </span>
-              </div>
+        <SliderField
+          label={
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+              <span>{param.label}</span>
+              <span style={{ fontSize: 14, color: "#e8e8e8" }}>
+                {formatValue(numVal)}
+              </span>
             </div>
           }
+          description={param.description}
+          value={sliderValue}
+          min={0}
+          max={100}
+          step={1}
+          showValue={false}
+          notchCount={notchCountValue}
+          notchLabels={notchLabels}
+          notchTicksVisible={true}
+          onChange={(sliderPos) => {
+            const realValue = sliderToReal(sliderPos);
+            onChange(param.id, realValue);
+          }}
+          bottomSeparator="none"
         />
       );
     }
 
-    // Linear slider (no segments)
+    // Linear slider (no segments): use notchCount from manifest or default to 10
     const min = param.min ?? 0;
     const max = param.max ?? 9999;
     const step = param.step || 1;
+    const notchCountValue = param.notchCount ?? 10;
+
+    const notchLabels = [];
+    for (let i = 0; i <= notchCountValue; i++) {
+      const value = min + (i / notchCountValue) * (max - min);
+      notchLabels.push({
+        notchIndex: i,
+        label: `${Math.round(value)}${unit}`,
+        value: value,
+      });
+    }
+
     return (
-      <Field
-        focusable={true}
+      <SliderField
         label={param.label}
-        description={
-          <div style={{ width: "100%" }}>
-            {param.description && (
-              <div style={{ color: "#8b929a", fontSize: 11, marginBottom: 8 }}>
-                {param.description}
-              </div>
-            )}
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ fontSize: 13, color: "#e8e8e8", fontWeight: "bold" }}>
-                {numVal}{unit}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={min}
-              max={max}
-              step={step}
-              value={numVal}
-              onChange={(e) => onChange(param.id, Number(e.target.value))}
-              style={{ width: "100%", accentColor: "#1a9fff", cursor: "pointer" }}
-            />
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-              <span style={{ color: "#8b929a", fontSize: 10 }}>{min}{unit}</span>
-              <span style={{ color: "#8b929a", fontSize: 10 }}>{max}{unit}</span>
-            </div>
-          </div>
-        }
+        description={param.description}
+        value={numVal}
+        min={min}
+        max={max}
+        step={step}
+        showValue={true}
+        valueSuffix={unit}
+        notchCount={notchCountValue + 1}
+        notchLabels={notchLabels}
+        notchTicksVisible={true}
+        onChange={(val) => onChange(param.id, val)}
+        bottomSeparator="none"
       />
     );
   }
@@ -239,6 +363,7 @@ function ConfigField({
 interface ExtensionDetailProps {
   extension: Extension;
   loaderEnabled: boolean;
+  logger: Logger;
   onBack: () => void;
   onToggle: (ext: Extension, enabled: boolean) => Promise<void>;
   onLoadConfig: (extId: string) => Promise<ExtensionConfig>;
@@ -253,6 +378,7 @@ interface ExtensionDetailProps {
 export function ExtensionDetail({
   extension: initialExtension,
   loaderEnabled,
+  logger,
   onBack,
   onToggle,
   onLoadConfig,
@@ -298,13 +424,17 @@ export function ExtensionDetail({
 
   const isDirty = hasConfig && JSON.stringify(configValues) !== JSON.stringify(savedValues);
 
-  const titleRef = useRef<HTMLDivElement>(null);
+  const backButtonRef = useRef<HTMLDivElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus title on mount so B button works immediately and focus starts at top
+  // Use input-aware focus to prevent scroll jumps on touch/mouse, but allow for gamepad
+  useInputAwareFocus(containerRef);
+
+  // Auto-focus back button on mount so B button works immediately
   useLayoutEffect(() => {
     requestAnimationFrame(() => {
-      titleRef.current?.focus();
+      backButtonRef.current?.focus();
     });
   }, []);
 
@@ -452,20 +582,14 @@ export function ExtensionDetail({
 
   return (
     <DialogBody>
-      <DialogControlsSection>
-        {/* Header: Title + Back + X button (reverse DOM order for upward navigation) */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            padding: "8px 16px 12px 16px",
-            gap: 12,
-            position: "relative",
-          }}
-        >
-          {/* X button - first in DOM (third when navigating up from title) */}
+      <DialogControlsSection ref={containerRef}>
+        {/* Sticky X button container */}
+        <div style={{ position: "sticky", top: 0, zIndex: 100, height: 0, pointerEvents: "none" }}>
           <Focusable
             style={{
+              position: "absolute",
+              top: 8,
+              right: 16,
               width: 28,
               height: 28,
               borderRadius: "50%",
@@ -475,17 +599,28 @@ export function ExtensionDetail({
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              flexShrink: 0,
-              order: 3,
+              pointerEvents: "auto",
             }}
             onActivate={handleBack}
             onCancel={handleBack}
           >
             <FaTimes style={{ fontSize: 12, color: "#ccc" }} />
           </Focusable>
+        </div>
 
-          {/* Back button - second in DOM (second when navigating up from title) */}
+        {/* Header: Back button + Title */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "8px 0 12px 0",
+            gap: 12,
+            position: "relative",
+          }}
+        >
+          {/* Back button */}
           <Focusable
+            ref={backButtonRef}
             style={{
               display: "flex",
               alignItems: "center",
@@ -496,7 +631,6 @@ export function ExtensionDetail({
               cursor: "pointer",
               fontSize: 13,
               flexShrink: 0,
-              order: 2,
             }}
             onActivate={handleBack}
             onCancel={handleBack}
@@ -505,24 +639,9 @@ export function ExtensionDetail({
             <span>Back</span>
           </Focusable>
 
-          {/* Title - third in DOM (first when navigating up from title, wraps to status) */}
-          <Focusable
-            ref={titleRef}
-            style={{
-              fontSize: 18,
-              fontWeight: "bold",
-              flex: 1,
-              minWidth: 0,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              padding: "6px 0",
-              order: 1,
-            }}
-            onCancel={handleBack}
-          >
+          <span style={{ fontSize: 18, fontWeight: "bold", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {manifest.name}
-          </Focusable>
+          </span>
         </div>
 
         {/* Divider */}
@@ -530,7 +649,7 @@ export function ExtensionDetail({
           style={{
             height: 1,
             background: "rgba(255,255,255,0.1)",
-            margin: "0 16px 8px 16px",
+            margin: "0 0 8px 0",
           }}
         />
 
@@ -550,6 +669,7 @@ export function ExtensionDetail({
               checked={isEnabled}
               onChange={handleToggle}
               disabled={!canToggle}
+              bottomSeparator="none"
             />
           </div>
         </Focusable>
@@ -591,7 +711,11 @@ export function ExtensionDetail({
 
       {/* Enable Sysext Service button - only show for loader when unloaded */}
       {status === "unloaded" && isLoader && (
-        <ButtonItem layout="below" onClick={handleEnableSysext}>
+        <ButtonItem
+          layout="below"
+          onClick={handleEnableSysext}
+          bottomSeparator="none"
+        >
           Enable Sysext Service
         </ButtonItem>
       )}
@@ -710,63 +834,88 @@ export function ExtensionDetail({
               param={param}
               value={configValues[param.id]}
               onChange={handleFieldChange}
+              logger={logger}
             />
           ))}
 
           {isDirty && (
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <ButtonItem
-                layout="below"
-                onClick={handleReset}
-                disabled={configSaving}
-                style={{ flex: 1 }}
+            <>
+              <Focusable
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 8,
+                  justifyContent: "center",
+                }}
+                flow-children="horizontal"
               >
-                Reset
-              </ButtonItem>
-              <ButtonItem
-                layout="below"
-                onClick={handleApply}
-                disabled={configSaving}
-                style={{ flex: 1 }}
-              >
-                {configSaving ? "Applying..." : "Apply"}
-              </ButtonItem>
-            </div>
+                <ButtonItem
+                  layout="below"
+                  onClick={handleReset}
+                  disabled={configSaving}
+                  bottomSeparator="none"
+                >
+                  Reset
+                </ButtonItem>
+                <ButtonItem
+                  layout="below"
+                  onClick={handleApply}
+                  disabled={configSaving}
+                  bottomSeparator="none"
+                >
+                  {configSaving ? "Applying..." : "Apply"}
+                </ButtonItem>
+              </Focusable>
+              <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 12 }} />
+            </>
           )}
         </Focusable>
       )}
 
-      {/* README Section Header */}
+      {/* README Sections */}
       {readme && (
-        <Focusable
-          // @ts-ignore
-          focusableIfNoChildren={true}
-          onCancel={handleBack}
-          style={{ marginTop: 16 }}
-        >
-          <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>Details</span>
-          <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
-        </Focusable>
-      )}
+        <>
+          {/* README Header */}
+          <Focusable
+            // @ts-ignore
+            focusableIfNoChildren={true}
+            onCancel={handleBack}
+            style={{ marginTop: 16 }}
+          >
+            <span style={{ fontSize: "1.1em", fontWeight: "bold" }}>README</span>
+            <div style={{ width: "100%", height: 1, background: "rgba(255,255,255,0.1)", marginTop: 4 }} />
+          </Focusable>
 
-      {/* README Content */}
-      {readme && (
-        <Field
-          focusable={true}
-          description={
-            <div
-              style={{
-                color: "#bdc3c7",
-                fontSize: 13,
-                lineHeight: 1.5,
-                whiteSpace: "pre-wrap",
-                fontFamily: "monospace",
-              }}
-            >
-              {readme}
-            </div>
-          }
-        />
+          {/* README Content Sections */}
+          {parseReadme(readme).map((section, index) => (
+            <Field
+              key={`readme-${index}`}
+              focusable={true}
+              label={section.title ? (
+                <span style={{
+                  fontSize: section.level === 1 ? 16 : section.level === 2 ? 14 : 13,
+                  fontWeight: "bold",
+                }}>
+                  {section.title}
+                </span>
+              ) : undefined}
+              bottomSeparator={section.title ? undefined : "none"}
+              description={
+                <div
+                  style={{
+                    color: "#bdc3c7",
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "monospace",
+                  }}
+                >
+                  {section.content}
+                </div>
+              }
+            />
+          ))}
+        </>
       )}
       </DialogControlsSection>
     </DialogBody>

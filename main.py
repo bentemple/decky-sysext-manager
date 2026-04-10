@@ -86,3 +86,11 @@ class Plugin:
     async def enable_sysext(self) -> dict:
         """Enable and start the systemd-sysext service."""
         return await self.manager.enable_sysext()
+
+    # Logging
+
+    async def log_from_ui(self, level: str, message: str) -> dict:
+        """Log a message from the UI for debugging."""
+        log_func = getattr(decky.logger, level.lower(), decky.logger.info)
+        log_func(f"[UI] {message}")
+        return {"success": True}

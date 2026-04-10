@@ -15,6 +15,7 @@ import { useExtensions } from "../hooks/useExtensions";
 import { ExtensionDetail } from "./ExtensionDetail";
 import { UninstallDialog } from "./UninstallDialog";
 import { AboutPage } from "./AboutPage";
+import { createLogger, Logger } from "../utils/logger";
 
 // Status badge component
 function StatusBadge({ status }: { status: ExtensionStatus }) {
@@ -140,6 +141,7 @@ function sortCategories(categories: string[]): string[] {
 function ExtensionDetailModal({
   extension,
   loaderEnabled,
+  logger,
   onToggle,
   onLoadConfig,
   onSaveConfig,
@@ -152,6 +154,7 @@ function ExtensionDetailModal({
 }: {
   extension: Extension;
   loaderEnabled: boolean;
+  logger: Logger;
   onToggle: (ext: Extension, enabled: boolean) => Promise<void>;
   onLoadConfig: (extId: string) => Promise<import("../types/manifest").ExtensionConfig>;
   onSaveConfig: (extId: string, config: Record<string, string | number>) => Promise<{ success: boolean; error?: string }>;
@@ -175,6 +178,7 @@ function ExtensionDetailModal({
       <ExtensionDetail
         extension={extension}
         loaderEnabled={loaderEnabled}
+        logger={logger}
         onBack={handleBack}
         onToggle={onToggle}
         onLoadConfig={onLoadConfig}
@@ -193,6 +197,7 @@ function ExtensionDetailModal({
 function ExtensionListPage({
   extensions,
   loading,
+  logger,
   enable,
   disable,
   updateExt,
@@ -209,6 +214,7 @@ function ExtensionListPage({
 }: {
   extensions: Extension[];
   loading: boolean;
+  logger: Logger;
   enable: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   disable: (extId: string, promptAnswers?: Record<string, boolean>) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
   updateExt: (extId: string) => Promise<{ success: boolean; needs_reboot?: boolean; error?: string }>;
@@ -346,6 +352,7 @@ function ExtensionListPage({
       <ExtensionDetailModal
         extension={liveExt}
         loaderEnabled={isLoaderEnabled}
+        logger={logger}
         onToggle={handleToggle}
         onLoadConfig={loadConfig}
         onSaveConfig={saveConfig}
@@ -356,7 +363,7 @@ function ExtensionListPage({
         onRefresh={() => refreshAndGetExtension(extId)}
       />
     );
-  }, [byId, loader, handleToggle, loadConfig, saveConfig, updateManager, updateExt, enableSysext, handleUpdateComplete, refreshAndGetExtension]);
+  }, [byId, loader, logger, handleToggle, loadConfig, saveConfig, updateManager, updateExt, enableSysext, handleUpdateComplete, refreshAndGetExtension]);
 
   const handleReboot = useCallback(async () => {
     await triggerReboot();
@@ -444,9 +451,12 @@ function ExtensionListPage({
 export function SettingsView() {
   const { extensions, loading, enable, disable, updateExt, triggerReboot, loadConfig, saveConfig, updateManager, enableSysextService, refreshAndGetExtension } = useExtensions();
 
+  const logger = createLogger();
+
   const sharedProps = {
     extensions,
     loading,
+    logger,
     enable,
     disable,
     updateExt,

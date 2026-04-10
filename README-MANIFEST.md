@@ -104,16 +104,57 @@ config:
       min: 5             # Optional minimum (for integer/duration)
       max: 960           # Optional maximum
       step: 5            # Optional step increment
+      notchCount: 10     # Optional number of notches on slider (default: 10 for linear, segments.length+1 for segmented)
+      segments:          # Optional segmented slider configuration
+        - width: 40      # Percentage width of this segment
+          from: 1        # Starting value
+          to: 60         # Ending value
+          step: 1        # Step size within segment
+        - width: 40
+          from: 60
+          to: 480
+          step: 30
+        - width: 20
+          from: 480
+          to: 960
+          step: 120
 ```
 
 ### Parameter Types
 
 | Type | Description | Additional Fields |
 |------|-------------|-------------------|
-| `integer` | Numeric value | `min`, `max`, `step`, `unit` |
-| `duration` | Time value in minutes | `min`, `max`, `step`, `unit` |
+| `integer` | Numeric value | `min`, `max`, `step`, `unit`, `notchCount`, `segments` |
+| `duration` | Time value in minutes | `min`, `max`, `step`, `unit`, `notchCount`, `segments` |
 | `boolean` | True/false toggle | - |
 | `select` | Dropdown selection | `options` |
+
+### Segmented Sliders
+
+Segmented sliders allow different step sizes and ranges across the slider:
+
+```yaml
+- id: HibernateDelay
+  label: "Hibernate Delay"
+  type: duration
+  unit: "min"
+  notchCount: 10
+  segments:
+    - width: 40       # First 40% of slider: 1-60 minutes, step by 1
+      from: 1
+      to: 60
+      step: 1
+    - width: 40       # Next 40%: 60-480 minutes (1-8 hours), step by 30
+      from: 60
+      to: 480
+      step: 30
+    - width: 20       # Final 20%: 480-960 minutes (8-16 hours), step by 120
+      from: 480
+      to: 960
+      step: 120
+```
+
+**Note:** Segment widths must sum to 100.
 
 ### Select Options
 

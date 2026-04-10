@@ -31,6 +31,7 @@ export interface ConfigParameter {
   min?: number;
   max?: number;
   step?: number;
+  notchCount?: number;
   segments?: ConfigParameterSegment[];
   options?: { value: string; label: string }[];
 }

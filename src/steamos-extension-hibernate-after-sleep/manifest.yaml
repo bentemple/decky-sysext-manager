@@ -11,7 +11,7 @@ activation:
 
 # Configuration parameters
 config:
-  path: "/home/deck/.config/hibernate-after-sleep"
+  path: "/var/lib/extensions-config/hibernate-after-sleep"
   parameters:
     - id: HibernateDelaySec
       label: "Hibernate Delay"
@@ -19,15 +19,14 @@ config:
       type: duration
       default: 60
       unit: "min"
-      min: 5
-      max: 10080
+      notchCount: 11
       segments:
         - width: 40
-          from: 5
-          to: 180
+          from: 0
+          to: 240
           step: 5
         - width: 40
-          from: 180
+          from: 240
           to: 1440
           step: 60
         - width: 20
@@ -41,6 +40,7 @@ config:
       type: integer
       default: 20
       unit: "GB"
+      notchCount: 14
       min: 8
       max: 64
       step: 1
